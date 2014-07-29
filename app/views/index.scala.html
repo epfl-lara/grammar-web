@@ -1,0 +1,59 @@
+@()(implicit request: RequestHeader)
+
+@main("Grammar Online") {
+  <div id="allcontent">
+    <div id="title" class="std-background">
+    <h1>Grammar</h1>
+      <div class="toolbox">
+        <a id="button-save" href="#"><i class="icon-save"></i> <span>Save</span></a>
+        <a id="button-undo" href="#"><i class="icon-undo"></i> <span>Undo</span></a>
+        <a id="button-redo" href="#"><i class="icon-repeat"></i> <span>Redo</span></a>
+      </div>
+    </div>
+    <script>
+        var _websocket_url = "@controllers.routes.Application.openConsole().webSocketURL()";
+    </script>
+
+    <div class="container-fluid">
+          <div class="row-fluid">
+                <div id="codecolumn" class="span8">
+                  <form id="grammarinput" method="POST" action="">
+                    <div id="codebox">Test</div>
+                  </form>
+                </div>
+                <div id="actionscolumn" class="span4">
+                  <div id="selectcolumn" class="action">
+                    <h3 class="std-background"><i class="icon-upload"></i> Load an exercise:</h3>
+                    <select id="example-loader" name="codeexample">
+                      <option value="">-- Select an exercise --</option>
+                    </select>
+                  </div>
+
+                  <div class="action" id="console-action">
+                      <h3 class="std-background"><i class="icon-comments-alt"></i> Console:</h3>
+                      <div id="console"></div>
+                  </div>
+
+                  <div id="disconnectError" class="error alert alert-error fade hide in">
+                      <a class="close" data-dismiss="alert" href="#">&times;</a>
+                      <h4>Failed to connect</h4>
+                      <p>The server appears to be unreachable right now.</p>
+                      <p id="disconnectMsg"></p>
+                      <p></p>
+                  </div>
+
+                  <div id="connectError" class="error alert alert-error fade hide in">
+                      <a class="close" data-dismiss="alert" href="#">&times;</a>
+                      <h4>Failed to connect</h4>
+                      <p>Failed to contact the mothership :(</p>
+                      <p>It usually indicates that your firewall blocks traffic on websocket ports.</p>
+                  </div>
+
+                  <div id="notifications">
+                  </div>
+                </div>
+          </div>
+    </div>
+  </div>
+  <div id="release">&copy; EPFL, Lausanne 2009-2014 </div>
+}
