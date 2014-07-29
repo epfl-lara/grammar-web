@@ -421,4 +421,11 @@ $(document).ready(function() {
         editor.selection.clearSelection();
         editor.gotoLine(0);
     }
+
+    $("#button-check").click(function(event) {
+      var msg = JSON.stringify(
+        {action: "doCheck"}
+      )
+      leonSocket.send(msg)
+    });
 });

@@ -51,6 +51,10 @@ class WebSession(remoteIP: String) extends Actor {
         (event \ "action").as[String] match {
           case "hello" =>
             clientLog("Welcome!")
+
+          case "doUpdateCode" =>
+            clientLog("Ok I received "+(event \ "code").as[String])
+
           case _ =>
             clientError("Error: Unhandled client event "+event)
         }
