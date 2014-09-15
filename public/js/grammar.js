@@ -347,9 +347,12 @@ $(document).ready(function() {
     }
     
     handlers["exerciseDesc"] = function(data) {
-    	var note = $('<div></div>').html(data.desc)
+    	//replace "\n" in the description by "<br>"
+    	var desc = '<br />&nbsp;' + data.desc.replace(/\n/g,"<br />&nbsp;") +'<br />' 
+    	var formnote = $('<div><h3 class="std-background"><i class="icon-comments-alt"></i> Description: </h3><div>' 
+    			+ desc + '</div></div>')
     	$("#description").empty();
-        $("#description").append(note);
+        $("#description").append(formnote);
     }
 
     function loadSelectedExample() {
@@ -437,8 +440,11 @@ $(document).ready(function() {
     }
 
     $("#button-check").click(function(event) {
+    	//get 'id' of the selected problem
+      var currentCode = editor.getValue()
+      var exId = $('#example-loader').find(":selected").val()
       var msg = JSON.stringify(
-        {action: "doCheck"}
+        {action: "doCheck", exerciseId: exId, code : currentCode }
       )
       leonSocket.send(msg)
     });
