@@ -26,7 +26,7 @@ object Application extends Controller {
   def index = Action { implicit r =>
     Ok(views.html.index())
   }
-
+  
   def openConsole() = WebSocket.tryAccept[JsValue] { request =>
     import play.api.Play.current
 

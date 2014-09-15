@@ -178,6 +178,15 @@ $(document).ready(function() {
             setDisconnected()
         }
     }
+    
+    //adding options to the downdown list
+    handlers["exercises"] = function(data) {    	
+	  $.each(data, function(field, exerciseName) {
+		  if(field != "kind") {		    
+		    $('#example-loader').append($('<option></option>').val(field).html(exerciseName));
+		  }
+	  });
+    }		
 
     var openEvent = function(event) {
       setConnected()
@@ -185,6 +194,8 @@ $(document).ready(function() {
       var msg = JSON.stringify(
         {action: "hello"}
       )
+      leonSocket.send(msg)
+      msg = JSON.stringify({action: "getExerciseList"})        
       leonSocket.send(msg)
     }
 
@@ -334,14 +345,17 @@ $(document).ready(function() {
 
         localStorage.setItem("leonEditorCode", editor.getValue());
     }
+    
+    handlers["exerciseDesc"] = function(data) {
+    	var note = $('<div></div>').html(data.desc)
+    	$("#description").empty();
+        $("#description").append(note);
+    }
 
     function loadSelectedExample() {
-        var selected = $('#example-loader').find(":selected[id]")
-
-        var id = selected.attr("id")
-        var group = selected.attr("group")
-
-        loadExample(group, id)
+        var value = $('#example-loader').find(":selected").val()        
+        var msg = JSON.stringify({action: "loadExercise", exerciseId : value})
+        leonSocket.send(msg)
     }
 
     function loadExample(group, id) {
@@ -367,7 +381,7 @@ $(document).ready(function() {
             });
         }
     }
-
+    
     $("#example-loader").change(loadSelectedExample);
 
     var editorSession = editor.getSession();
@@ -387,7 +401,7 @@ $(document).ready(function() {
     editorSession.on('change', function(e) {
         lastChange = new Date().getTime();
         updateSaveButton();
-        setTimeout(onCodeUpdate, timeWindow+50)
+        //setTimeout(onCodeUpdate, timeWindow+50)
     });
 
     function resizeEditor() {
