@@ -333,7 +333,8 @@ $(document).ready(function() {
         }
     }
 
-    function onCodeUpdate() {
+/* Uncomment this if you want to recompile on-the-fly  
+ *  function onCodeUpdate() {
         var now = new Date().getTime()
 
         if (lastChange < (now - timeWindow)) {
@@ -344,7 +345,7 @@ $(document).ready(function() {
         }
 
         localStorage.setItem("leonEditorCode", editor.getValue());
-    }
+    }*/
     
     handlers["exerciseDesc"] = function(data) {
     	//replace "\n" in the description by "<br>"
@@ -425,10 +426,9 @@ $(document).ready(function() {
 
     resizeEditor();
 
-    handlers["replace_code"] = function(data) {
+    handlers["replace_grammar"] = function(data) {
         storeCurrent(editorSession.getValue())
-        editorSession.setValue(data.newCode)
-        recompile()
+        editorSession.setValue(data.grammar)        
     }
 
     var storedCode = localStorage.getItem("leonEditorCode")
@@ -438,6 +438,14 @@ $(document).ready(function() {
         editor.selection.clearSelection();
         editor.gotoLine(0);
     }
+    
+    $("#button-norm").click(function(event) {    	
+      var currentCode = editor.getValue()      
+      var msg = JSON.stringify(
+        {action: "normalize", code : currentCode }
+      )
+      leonSocket.send(msg)
+    });
 
     $("#button-check").click(function(event) {
     	//get 'id' of the selected problem

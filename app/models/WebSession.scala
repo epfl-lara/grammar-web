@@ -16,6 +16,9 @@ import grammar.GrammarParser
 import grammar.exercises.Exercise
 import grammar.EBNFGrammar.BNFGrammar
 import grammar.CFGrammar.Grammar
+import grammar.BNFConverter
+import parsing.CNFConverter
+import grammar.CFGrammar
 
 class WebSession(remoteIP: String) extends Actor {
   import Protocol._
@@ -57,6 +60,8 @@ class WebSession(remoteIP: String) extends Actor {
             val grammar = (msg \ "code").as[String]
             val rules = grammar.split("\n").toList            
             //try to parse the grammar (syntax errors will be displayed to the console)
+            //TODO: prevent user grammars from using hypens in the names of symbols
+            //it is reserved for newly created symbols
             val bnfGrammar = (new GrammarParser()).parseGrammar(rules)
             clientLog("Your Grammar: "+bnfGrammar)
             
@@ -77,7 +82,23 @@ class WebSession(remoteIP: String) extends Actor {
                 Map("desc" -> toJson(ex.desc))
             }
             event("exerciseDesc",data)
-          
+
+          case "normalize" =>
+            val grammar = (msg \ "code").as[String]
+            val rules = grammar.split("\n").toList
+            //try to parse the grammar (syntax errors will be displayed in the client console)
+            val bnfGrammar = (new GrammarParser()).parseGrammar(rules)
+            //convert the grammar to cnf form and then reconvert
+            val normalization = 
+              (BNFConverter.ebnfToGrammar _ 
+                  andThen CNFConverter.toCNF
+                  andThen CNFConverter.cnfToGrammar
+                  andThen CFGrammar.simplifyGrammar
+                  andThen CFGrammar.renameAutoSymbols)
+            val normalGrammar = normalization(bnfGrammar)
+            val data = Map("grammar" -> toJson(normalGrammar.toString))
+            event("replace_grammar", data)
+            
           case "doCheck" => 
             val exid = (msg \ "exerciseId").as[String].toInt
             val exercise = grammar.exercises.ExerciseSet1.get.find(_.id  == exid)
@@ -88,7 +109,7 @@ class WebSession(remoteIP: String) extends Actor {
                 val grammar = (msg \ "code").as[String]
                 val rules = grammar.split("\n").toList            
                 //try to parse the grammar (syntax errors will be displayed to the console)
-                val bnfGrammar = (new GrammarParser()).parseGrammar(rules)
+                val bnfGrammar = (new GrammarParser()).parseGrammar(rules)                               
                 checkSolution(ex, bnfGrammar)
             }            
             
@@ -120,67 +141,98 @@ class WebSession(remoteIP: String) extends Actor {
     import generators.LazyGenerator
     import grammar.exercises.ExerciseSet
     import grammar.exercises.Exercise
+    import repair.RepairResult._
     
     val nOfTests = 100
     val debug = false
 
     clientLog("===============")
     /*println(ex.id + ": " + ex.name)
-    println(ex.desc)*/    
+    println(ex.desc)*/
     //println("Evaluating solution ")
 
-    val cfg = ebnfToGrammar(ex.reference)
-    val equivChecker = new EquivalenceChecker(cfg, nOfTests)
-    val repairer = new Repairer(equivChecker)
-
-    /*println("Reference Grammar: ")
-    println(ex.reference)*/
-
-    //println("Reference Grammar In GNF: " + GNFConverter.toGNF(equivChecker.cnfRef))
-    if (debug) {
-      println("Tests: " + equivChecker.words.take(30).map(_.mkString(" ")).mkString("\n"))
-    }
-    val plainGrammar = ebnfToGrammar(studentGrammar)
-    val cnfG = CNFConverter.toCNF(plainGrammar)
-
-    if (debug && !cnfG.rules.isEmpty) {
-      println("Plain Student's Grammar: " + plainGrammar)
-      println("Strings for student grammar: " + (new LazyGenerator(cnfG)).getIterator(30).map(_.mkString(" ")).mkString("\n"))
-      //System.exit(0)
-    }
-    if (cnfG.rules.isEmpty) {
-      clientLog("The grammar is empty. Not all rules are produtive and reachable !!")
+    if (BNFConverter.usesRegOp(studentGrammar)) {
+      clientLog("The grammar is in EBNF form. Please normalize the grammar.")
     } else {
+      val plainGrammar = ebnfToGrammar(studentGrammar)
+      if (!CFGrammar.isNormalized(plainGrammar)) {
+        clientLog("The grammar has epsilon or unit productions.Please normalize the grammar.")        
+      } else {
 
-      //println("Student Grammar In GNF: " + GNFConverter.toGNF(cnfG))
-      //proveEquivalence(equivChecker.cnfRef, cnfG)
+        val cnfG = CNFConverter.toCNF(plainGrammar)        
+        if (cnfG.rules.isEmpty) {
+          clientLog("The grammar is empty. Not all rules are produtive and reachable !!")
+        } else {
 
-      equivChecker.isEquivalentTo(cnfG) match {
-        case equivResult @ PossiblyEquivalent() => {
-          clientLog(s"System:  $equivResult")
-          proveEquivalence(equivChecker.cnfRef, cnfG)
+          if (debug) {
+            clientLog("Your Grammar after normalization and epsilon removal: " + CNFConverter.cnfToGrammar(cnfG))
+            println("Plain Student's Grammar: " + plainGrammar)
+            println("Strings for student grammar: " + (new LazyGenerator(cnfG)).getIterator(30).map(_.mkString(" ")).mkString("\n"))
+            //System.exit(0)
+          }
+
+          val cfg = ebnfToGrammar(ex.reference)
+          val equivChecker = new EquivalenceChecker(cfg, nOfTests)
+          val repairer = new Repairer(equivChecker)
+          if (debug) {
+            /*println("Reference Grammar: ")
+    		println(ex.reference)*/
+            //println("Reference Grammar In GNF: " + GNFConverter.toGNF(equivChecker.cnfRef))      
+            println("Tests: " + equivChecker.words.take(30).map(_.mkString(" ")).mkString("\n"))
+          }
+
+          //println("Student Grammar In GNF: " + GNFConverter.toGNF(cnfG))
+          //proveEquivalence(equivChecker.cnfRef, cnfG)
+
+          equivChecker.isEquivalentTo(cnfG) match {
+            case equivResult @ PossiblyEquivalent() => {
+              clientLog(s"System:  $equivResult")
+              proveEquivalence(equivChecker.cnfRef, cnfG)
+            }
+            case equivResult @ NotEquivalentNotAcceptedBySolution(_) =>
+              clientLog(s"System:  Wrong. $equivResult")
+              val (resG, feedbacks) = repairer.hint(cnfG, equivResult)
+              prettyPrintFeedbacks(cnfG, resG, feedbacks)
+
+            /*clientLog("Repaired Grammar: ")
+          clientLog(repairer.prettyPrint(cnfG, resG).toString)*/
+            //proveEquivalence(equivChecker.cnfRef, resG)
+
+            case equivResult @ NotEquivalentNotGeneratedBySolution(_) =>
+              clientLog(s"System:  Wrong. $equivResult")
+              val (resG, feedbacks) = repairer.hint(cnfG, equivResult)
+              prettyPrintFeedbacks(cnfG, resG, feedbacks)
+
+            /*clientLog("Repaired Grammar: ")
+          clientLog(repairer.prettyPrint(cnfG, resG).toString)*/
+            //proveEquivalence(equivChecker.cnfRef, resG)
+          }
+          //clientLog(GrammarUtils.isLL1WithFeedback(plainGrammar).map("LL1:     " + _).getOrElse("LL1:     OK"))
         }
-        case equivResult @ NotEquivalentNotAcceptedBySolution(_) =>
-          clientLog(s"System:  Wrong. $equivResult")
-          val resG = repairer.repair(cnfG, equivResult)
-          clientLog("Repaired Grammar: ")
-          clientLog(resG.toString)
-          proveEquivalence(equivChecker.cnfRef, resG)
-          
-        case equivResult @ NotEquivalentNotGeneratedBySolution(_) =>
-          clientLog(s"System:  Wrong. $equivResult")
-          val resG = repairer.repair(cnfG, equivResult)
-          clientLog("Repaired Grammar: ")
-          clientLog(resG.toString)
-          proveEquivalence(equivChecker.cnfRef, resG)
       }
-      clientLog(GrammarUtils.isLL1WithFeedback(plainGrammar).map("LL1:     " + _).getOrElse("LL1:     OK"))
     }
     clientLog("===============")
     /*//for stats    
     val pr = new java.io.PrintWriter(quiz.quizName + "-stats.txt")
     Stats.dumpStats(pr)
     pr.close()*/
+
+    def prettyPrintFeedbacks(cnfG: Grammar, resG: Grammar, feedbacks: List[GrammarFeedback]) = {
+      //pretty print feedbacks by renaming new non-terminals to simpler names
+      val newnonterms = nonterminals(resG) -- nonterminals(cnfG)
+      val renameMap = genRenameMap(newnonterms, nonterminals(resG))
+      feedbacks.foreach(f => {
+        val feedbackString = f match {
+          case AddAllRules(rules) =>
+            clientLog("Add: " + replace(rules, renameMap).mkString("\n"))
+          case RemoveRules(rules) =>
+            clientLog("Remove: " + replace(rules, renameMap).mkString("\n"))
+          case ReplaceRules(olds, news) =>
+            clientLog("Replace: " + olds.mkString("\n"))
+            clientLog("by: " + replace(news, renameMap).mkString("\n"))
+        }
+      })
+    }
 
     def proveEquivalence(g1: Grammar, g2: Grammar) = {
       clientLog("Trying to prove equivalence...")
@@ -192,8 +244,6 @@ class WebSession(remoteIP: String) extends Actor {
           clientLog("Cannot prove equivalence!")
       }
     }
-  }
-  
-  
+  }   
 }
 
