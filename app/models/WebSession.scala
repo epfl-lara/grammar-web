@@ -28,29 +28,28 @@ class WebSession(remoteIP: String) extends Actor {
   def pushMessage(v: JsValue) = channel.push(v)
 
   def clientLog(msg: String) = {
-    Logger.info("[>] L: "+msg)
+    Logger.info("[>] L: " + msg)
     pushMessage(toJson(Map("kind" -> "console", "level" -> "log", "message" -> msg)))
   }
 
   def clientError(msg: String) = {
-    Logger.info("[>] E: "+msg)
+    Logger.info("[>] E: " + msg)
     pushMessage(toJson(Map("kind" -> "console", "level" -> "error", "message" -> msg)))
   }
 
   def event(kind: String, data: Map[String, JsValue]) = {
-    Logger.info("[>] "+kind)
+    Logger.info("[>] " + kind)
     pushMessage(toJson(Map("kind" -> toJson(kind)) ++ data))
   }
 
   def receive = {
     case Init =>
       sender ! InitSuccess(enumerator)
-
-      clientLog("New client")
+      //clientLog("New client")
 
     case FromClient(msg) =>
       try {
-        Logger.info("[<] "+msg)
+        Logger.info("[<] " + msg)
 
         (msg \ "action").as[String] match {
           case "hello" =>
@@ -58,30 +57,30 @@ class WebSession(remoteIP: String) extends Actor {
 
           case "doUpdateCode" =>
             val grammar = (msg \ "code").as[String]
-            val rules = grammar.split("\n").toList            
+            val rules = grammar.split("\n").toList
             //try to parse the grammar (syntax errors will be displayed to the console)
             //TODO: prevent user grammars from using hypens in the names of symbols
             //it is reserved for newly created symbols
             val bnfGrammar = (new GrammarParser()).parseGrammar(rules)
-            clientLog("Your Grammar: "+bnfGrammar)
-            
-          case "getExerciseList" => 
+            //clientLog("Your Grammar: " + bnfGrammar)
+
+          case "getExerciseList" =>
             //read all exercises in the grammar package and send their names and ids to the clients
             val exercises = grammar.exercises.ExerciseSet1
-            val data = exercises.get.map(ex => (ex.id.toString -> toJson(ex.name))).toMap 
+            val data = exercises.get.map(ex => (ex.id.toString -> toJson(ex.name))).toMap
             //val data = Map("ex1" -> toJson("Exercise 1"))
             event("exercises", data)
-          
-          case "loadExercise" => 
+
+          case "loadExercise" =>
             val exid = (msg \ "exerciseId").as[String].toInt
-            val exercise = grammar.exercises.ExerciseSet1.get.find(_.id  == exid)
+            val exercise = grammar.exercises.ExerciseSet1.get.find(_.id == exid)
             val data = exercise match {
               case None =>
                 Map("desc" -> toJson("There is no exercise with the given id"))
               case Some(ex) =>
                 Map("desc" -> toJson(ex.desc))
             }
-            event("exerciseDesc",data)
+            event("exerciseDesc", data)
 
           case "normalize" =>
             val grammar = (msg \ "code").as[String]
@@ -89,60 +88,73 @@ class WebSession(remoteIP: String) extends Actor {
             //try to parse the grammar (syntax errors will be displayed in the client console)
             val bnfGrammar = (new GrammarParser()).parseGrammar(rules)
             //convert the grammar to cnf form and then reconvert
-            val normalization = 
-              (BNFConverter.ebnfToGrammar _ 
-                  andThen CNFConverter.toCNF
-                  andThen CNFConverter.cnfToGrammar
-                  andThen CFGrammar.simplifyGrammar
-                  andThen CFGrammar.renameAutoSymbols)
+            val normalization =
+              (BNFConverter.ebnfToGrammar _
+                andThen CNFConverter.toCNF
+                andThen CNFConverter.cnfToGrammar
+                andThen CFGrammar.simplifyGrammar
+                andThen CFGrammar.renameAutoSymbols)
             val normalGrammar = normalization(bnfGrammar)
             val data = Map("grammar" -> toJson(normalGrammar.toString))
             event("replace_grammar", data)
-            
-          case "doCheck" => 
+
+          case "doCheck" =>
             val exid = (msg \ "exerciseId").as[String].toInt
-            val exercise = grammar.exercises.ExerciseSet1.get.find(_.id  == exid)
+            val exercise = grammar.exercises.ExerciseSet1.get.find(_.id == exid)
             exercise match {
               case None =>
-                clientLog("There is no exercise with the given id")                
+                clientLog("There is no exercise with the given id")
               case Some(ex) =>
                 val grammar = (msg \ "code").as[String]
-                val rules = grammar.split("\n").toList            
-                //try to parse the grammar (syntax errors will be displayed to the console)
-                val bnfGrammar = (new GrammarParser()).parseGrammar(rules)                               
+                val rules = grammar.split("\n").toList
+                //try to parse the grammar (syntax errors will be displayed in the console)
+                val bnfGrammar = (new GrammarParser()).parseGrammar(rules)
                 checkSolution(ex, bnfGrammar)
-            }            
-            
+            }
+          case "getHints" => 
+            val exid = (msg \ "exerciseId").as[String].toInt
+            val exercise = grammar.exercises.ExerciseSet1.get.find(_.id == exid)
+            exercise match {
+              case None =>
+                clientLog("There is no exercise with the given id")
+              case Some(ex) =>
+                val grammar = (msg \ "code").as[String]
+                val rules = grammar.split("\n").toList
+                //try to parse the grammar (syntax errors will be displayed in the console)
+                val bnfGrammar = (new GrammarParser()).parseGrammar(rules)
+                provideHints(ex, bnfGrammar)
+            }
+
           case _ =>
-            clientError("Error: Unhandled client event "+msg)
+            clientError("Error: Unhandled client event " + msg)
         }
       } catch {
         case t: Throwable =>
-          clientError("Could not process event: "+t.getMessage)
+          clientError("Could not process event: " + t.getMessage)
       }
 
     case Quit =>
 
     case msg =>
-      clientError("Unknown message: "+msg)
+      clientError("Unknown message: " + msg)
   }
-  
-  def checkSolution(ex: Exercise, studentGrammar : BNFGrammar) {
 
-    import grammar.examples._
-    import grammar.utils._
-    import grammar._
-    import repair._
-    import parsing._
-    import CFGrammar._
-    import EBNFGrammar._
-    import BNFConverter._
-    import equivalence._
-    import generators.LazyGenerator
-    import grammar.exercises.ExerciseSet
-    import grammar.exercises.Exercise
-    import repair.RepairResult._
-    
+  import grammar.examples._
+  import grammar.utils._
+  import grammar._
+  import repair._
+  import parsing._
+  import CFGrammar._
+  import EBNFGrammar._
+  import BNFConverter._
+  import equivalence._
+  import generators.LazyGenerator
+  import grammar.exercises.ExerciseSet
+  import grammar.exercises.Exercise
+  import repair.RepairResult._
+
+  def checkSolution(ex: Exercise, studentGrammar: BNFGrammar) {
+
     val nOfTests = 100
     val debug = false
 
@@ -151,17 +163,80 @@ class WebSession(remoteIP: String) extends Actor {
     println(ex.desc)*/
     //println("Evaluating solution ")
 
+    val plainGrammar = ebnfToGrammar(studentGrammar)
+    val cnfG = CNFConverter.toCNF(plainGrammar)
+    if (cnfG.rules.isEmpty) {
+      clientLog("The grammar accepts/produces no strings! Check if all rules are reachable and productive !")
+    } else {
+
+      if (debug) {
+        clientLog("Your Grammar after normalization and epsilon removal: " + CNFConverter.cnfToGrammar(cnfG))
+        println("Plain Student's Grammar: " + plainGrammar)
+        println("Strings for student grammar: " + (new LazyGenerator(cnfG)).getIterator(30).map(_.mkString(" ")).mkString("\n"))
+        //System.exit(0)
+      }
+
+      val cfg = ebnfToGrammar(ex.reference)
+      val equivChecker = new EquivalenceChecker(cfg, nOfTests)
+      val repairer = new Repairer(equivChecker)
+      if (debug) {
+        /*println("Reference Grammar: ")
+    		println(ex.reference)*/
+        //println("Reference Grammar In GNF: " + GNFConverter.toGNF(equivChecker.cnfRef))      
+        println("Tests: " + equivChecker.words.take(30).map(_.mkString(" ")).mkString("\n"))
+      }
+
+      //println("Student Grammar In GNF: " + GNFConverter.toGNF(cnfG))
+      //proveEquivalence(equivChecker.cnfRef, cnfG)
+
+      equivChecker.isEquivalentTo(cnfG) match {
+        case equivResult @ PossiblyEquivalent() => {
+          if (proveEquivalence(equivChecker.cnfRef, cnfG)) {
+            clientLog("Correct.")
+          } else
+            clientLog("Possibly correct but unable prove correctness.")
+        }
+        case equivResult @ NotEquivalentNotAcceptedBySolution(ex) =>
+          clientLog("The grammar does not accept the string: " + wordToString(ex))
+
+        case equivResult @ NotEquivalentNotGeneratedBySolution(ex) =>
+          clientLog("The grammar accepts the invalid string: " + wordToString(ex))
+      }
+      //clientLog(GrammarUtils.isLL1WithFeedback(plainGrammar).map("LL1:     " + _).getOrElse("LL1:     OK"))
+    }
+    clientLog("===============")
+    /*//for stats    
+    val pr = new java.io.PrintWriter(quiz.quizName + "-stats.txt")
+    Stats.dumpStats(pr)
+    pr.close()*/
+
+    def proveEquivalence(g1: Grammar, g2: Grammar): Boolean = {
+      val verifier = new EquivalenceVerifier(g1, g2, nOfTests)
+      verifier.proveEquivalence() match {
+        case Some(true) => true
+        case _ => false
+      }
+    }
+  }
+
+  def provideHints(ex: Exercise, studentGrammar: BNFGrammar) {
+
+    val nOfTests = 100
+    val debug = false
+
+    clientLog("===============")
+
     if (BNFConverter.usesRegOp(studentGrammar)) {
-      clientLog("The grammar is in EBNF form. Please normalize the grammar.")
+      clientLog("The grammar is in EBNF form. Normalize the grammar.")
     } else {
       val plainGrammar = ebnfToGrammar(studentGrammar)
       if (!CFGrammar.isNormalized(plainGrammar)) {
-        clientLog("The grammar has epsilon or unit productions.Please normalize the grammar.")        
+        clientLog("Some rules are not normalized. Normalize the grammar.")
       } else {
 
-        val cnfG = CNFConverter.toCNF(plainGrammar)        
+        val cnfG = CNFConverter.toCNF(plainGrammar)
         if (cnfG.rules.isEmpty) {
-          clientLog("The grammar is empty. Not all rules are produtive and reachable !!")
+          clientLog("The grammar is empty. Not all rules are produtive and reachable.")
         } else {
 
           if (debug) {
@@ -186,28 +261,18 @@ class WebSession(remoteIP: String) extends Actor {
 
           equivChecker.isEquivalentTo(cnfG) match {
             case equivResult @ PossiblyEquivalent() => {
-              clientLog(s"System:  $equivResult")
-              proveEquivalence(equivChecker.cnfRef, cnfG)
+              clientLog("Cannot provide hints. The grammar is possibly correct.")
             }
-            case equivResult @ NotEquivalentNotAcceptedBySolution(_) =>
-              clientLog(s"System:  Wrong. $equivResult")
+            case equivResult @ NotEquivalentNotAcceptedBySolution(ex) =>
+              clientLog("To accept the string: " + wordToString(ex))
               val (resG, feedbacks) = repairer.hint(cnfG, equivResult)
               prettyPrintFeedbacks(cnfG, resG, feedbacks)
 
-            /*clientLog("Repaired Grammar: ")
-          clientLog(repairer.prettyPrint(cnfG, resG).toString)*/
-            //proveEquivalence(equivChecker.cnfRef, resG)
-
-            case equivResult @ NotEquivalentNotGeneratedBySolution(_) =>
-              clientLog(s"System:  Wrong. $equivResult")
+            case equivResult @ NotEquivalentNotGeneratedBySolution(ex) =>
+              clientLog("To block the string: " + wordToString(ex))
               val (resG, feedbacks) = repairer.hint(cnfG, equivResult)
               prettyPrintFeedbacks(cnfG, resG, feedbacks)
-
-            /*clientLog("Repaired Grammar: ")
-          clientLog(repairer.prettyPrint(cnfG, resG).toString)*/
-            //proveEquivalence(equivChecker.cnfRef, resG)
           }
-          //clientLog(GrammarUtils.isLL1WithFeedback(plainGrammar).map("LL1:     " + _).getOrElse("LL1:     OK"))
         }
       }
     }
@@ -233,17 +298,7 @@ class WebSession(remoteIP: String) extends Actor {
         }
       })
     }
+  }
 
-    def proveEquivalence(g1: Grammar, g2: Grammar) = {
-      clientLog("Trying to prove equivalence...")
-      val verifier = new EquivalenceVerifier(g1, g2, nOfTests)
-      verifier.proveEquivalence() match {
-        case Some(true) =>
-          clientLog("The grammars are proved to be equivalent!")
-        case _ =>
-          clientLog("Cannot prove equivalence!")
-      }
-    }
-  }   
 }
 

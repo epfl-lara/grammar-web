@@ -350,7 +350,7 @@ $(document).ready(function() {
     handlers["exerciseDesc"] = function(data) {
     	//replace "\n" in the description by "<br>"
     	var desc = '<br />&nbsp;' + data.desc.replace(/\n/g,"<br />&nbsp;") +'<br />' 
-    	var formnote = $('<div><h3 class="std-background"><i class="icon-comments-alt"></i> Description: </h3><div>' 
+    	var formnote = $('<div><h3 class="std-background"><i class="icon-book"></i> Description: </h3><div>' 
     			+ desc + '</div></div>')
     	$("#description").empty();
         $("#description").append(formnote);
@@ -447,12 +447,21 @@ $(document).ready(function() {
       leonSocket.send(msg)
     });
 
-    $("#button-check").click(function(event) {
-    	//get 'id' of the selected problem
+    $("#button-check").click(function(event) {    	
       var currentCode = editor.getValue()
+      //get 'id' of the selected problem
       var exId = $('#example-loader').find(":selected").val()
       var msg = JSON.stringify(
         {action: "doCheck", exerciseId: exId, code : currentCode }
+      )
+      leonSocket.send(msg)
+    });
+    
+    $("#button-hints").click(function(event) {    	
+      var currentCode = editor.getValue()
+      var exId = $('#example-loader').find(":selected").val()
+      var msg = JSON.stringify(
+        {action: "getHints", exerciseId: exId, code : currentCode }
       )
       leonSocket.send(msg)
     });
