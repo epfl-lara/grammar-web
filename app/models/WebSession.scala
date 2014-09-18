@@ -45,7 +45,7 @@ class WebSession(remoteIP: String) extends Actor {
   def receive = {
     case Init =>
       sender ! InitSuccess(enumerator)
-      //clientLog("New client")
+    //clientLog("New client")
 
     case FromClient(msg) =>
       try {
@@ -61,8 +61,9 @@ class WebSession(remoteIP: String) extends Actor {
             //try to parse the grammar (syntax errors will be displayed to the console)
             //TODO: prevent user grammars from using hypens in the names of symbols
             //it is reserved for newly created symbols
-            val bnfGrammar = (new GrammarParser()).parseGrammar(rules)
-            //clientLog("Your Grammar: " + bnfGrammar)
+            val (bnf, errstr) = (new GrammarParser()).parseGrammar(rules)
+            if (!bnf.isDefined)
+              clientLog("Parse Error: " + errstr)
 
           case "getExerciseList" =>
             //read all exercises in the grammar package and send their names and ids to the clients
@@ -86,17 +87,21 @@ class WebSession(remoteIP: String) extends Actor {
             val grammar = (msg \ "code").as[String]
             val rules = grammar.split("\n").toList
             //try to parse the grammar (syntax errors will be displayed in the client console)
-            val bnfGrammar = (new GrammarParser()).parseGrammar(rules)
-            //convert the grammar to cnf form and then reconvert
-            val normalization =
-              (BNFConverter.ebnfToGrammar _
-                andThen CNFConverter.toCNF
-                andThen CNFConverter.cnfToGrammar
-                andThen CFGrammar.simplifyGrammar
-                andThen CFGrammar.renameAutoSymbols)
-            val normalGrammar = normalization(bnfGrammar)
-            val data = Map("grammar" -> toJson(normalGrammar.toString))
-            event("replace_grammar", data)
+            val (bnfGrammar, errstr) = (new GrammarParser()).parseGrammar(rules)
+            if (!bnfGrammar.isDefined)
+              clientLog("Parse Error:" + errstr)
+            else {              
+              //convert the grammar to cnf form and then reconvert
+              val normalization =
+                (BNFConverter.ebnfToGrammar _
+                  andThen CNFConverter.toCNF
+                  andThen CNFConverter.cnfToGrammar
+                  andThen CFGrammar.simplifyGrammar
+                  andThen CFGrammar.renameAutoSymbols)
+              val normalGrammar = normalization(bnfGrammar.get)
+              val data = Map("grammar" -> toJson(normalGrammar.toString))
+              event("replace_grammar", data)
+            }
 
           case "doCheck" =>
             val exid = (msg \ "exerciseId").as[String].toInt
@@ -108,10 +113,13 @@ class WebSession(remoteIP: String) extends Actor {
                 val grammar = (msg \ "code").as[String]
                 val rules = grammar.split("\n").toList
                 //try to parse the grammar (syntax errors will be displayed in the console)
-                val bnfGrammar = (new GrammarParser()).parseGrammar(rules)
-                checkSolution(ex, bnfGrammar)
+                val (bnfGrammar, errstr) = (new GrammarParser()).parseGrammar(rules)
+                if (!bnfGrammar.isDefined)
+                  clientLog("Parse Error:" + errstr)
+                else
+                  checkSolution(ex, bnfGrammar.get)
             }
-          case "getHints" => 
+          case "getHints" =>
             val exid = (msg \ "exerciseId").as[String].toInt
             val exercise = grammar.exercises.ExerciseSet1.get.find(_.id == exid)
             exercise match {
@@ -121,8 +129,11 @@ class WebSession(remoteIP: String) extends Actor {
                 val grammar = (msg \ "code").as[String]
                 val rules = grammar.split("\n").toList
                 //try to parse the grammar (syntax errors will be displayed in the console)
-                val bnfGrammar = (new GrammarParser()).parseGrammar(rules)
-                provideHints(ex, bnfGrammar)
+                val (bnfGrammar, errstr) = (new GrammarParser()).parseGrammar(rules)
+                if (!bnfGrammar.isDefined)
+                  clientLog("Parse Error:" + errstr)
+                else
+                  provideHints(ex, bnfGrammar.get)
             }
 
           case _ =>
