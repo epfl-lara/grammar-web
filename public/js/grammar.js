@@ -302,7 +302,7 @@ $(document).ready(function() {
 
         var note = $("<div>", {
             "class": "alert fade in alert-"+type
-        }).html('<button type="button" class="close" data-dismiss="alert">×</button>'+content)
+        }).html('<button type="button" class="close" data-dismiss="alert">��</button>'+content)
 
         $("#notifications").append(note);
 
@@ -451,18 +451,26 @@ $(document).ready(function() {
       var currentCode = editor.getValue()
       //get 'id' of the selected problem
       var exId = $('#example-loader').find(":selected").val()
-      var msg = JSON.stringify(
-        {action: "doCheck", exerciseId: exId, code : currentCode }
-      )
-      leonSocket.send(msg)
+      if(exId == "")
+    	  notify("Excercise not selected!", "error")
+      else {
+	      var msg = JSON.stringify(
+	        {action: "doCheck", exerciseId: exId, code : currentCode }
+	      )
+	      leonSocket.send(msg)
+      }
     });
     
     $("#button-hints").click(function(event) {    	
       var currentCode = editor.getValue()
       var exId = $('#example-loader').find(":selected").val()
-      var msg = JSON.stringify(
-        {action: "getHints", exerciseId: exId, code : currentCode }
-      )
-      leonSocket.send(msg)
+      if(exId == "")
+    	  notify("Excercise not selected!", "error")
+      else {
+	      var msg = JSON.stringify(
+	        {action: "getHints", exerciseId: exId, code : currentCode }
+	      )
+	      leonSocket.send(msg)
+      }
     });
 });
