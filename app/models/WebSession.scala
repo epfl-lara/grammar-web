@@ -303,9 +303,12 @@ class WebSession(remoteIP: String) extends Actor {
             clientLog("Add: " + replace(rules, renameMap).mkString("\n"))
           case RemoveRules(rules) =>
             clientLog("Remove: " + replace(rules, renameMap).mkString("\n"))
-          case ReplaceRules(olds, news) =>
+          case RefineRules(olds, news) =>            
             clientLog("Replace: " + olds.mkString("\n"))
             clientLog("by: " + replace(news, renameMap).mkString("\n"))
+          case ExpandRules(olds, news) =>
+            clientLog("First, expand the righside of the rule: " + olds.mkString("\n"))
+            clientLog("as: " + replace(news, renameMap).mkString("\n"))
         }
       })
     }

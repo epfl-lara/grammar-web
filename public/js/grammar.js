@@ -302,7 +302,7 @@ $(document).ready(function() {
 
         var note = $("<div>", {
             "class": "alert fade in alert-"+type
-        }).html('<button type="button" class="close" data-dismiss="alert">��</button>'+content)
+        }).html('<button type="button" class="close" data-dismiss="alert">&times;</button>'+content)
 
         $("#notifications").append(note);
 
