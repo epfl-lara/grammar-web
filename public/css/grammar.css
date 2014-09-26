@@ -203,6 +203,14 @@ div #console {
     overflow-x: hidden;
 }
 
+div #desc-space {
+    font-family: "Lucida Console", monospace;
+    font-size: 12px;
+    height: auto;
+    padding: 5px;        
+}
+
+
 #connectError {
 }
 

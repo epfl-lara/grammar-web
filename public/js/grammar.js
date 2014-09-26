@@ -126,7 +126,7 @@ $(document).ready(function() {
     /**
      * Compilation
      */
-
+/*
     handlers["editor"] = function (data) {
         if ("annotations" in data) {
             var session = editor.getSession();
@@ -149,7 +149,7 @@ $(document).ready(function() {
 
             session.setAnnotations(data.annotations);
         }
-    }
+    }*/
 
     handlers["notification"] = function (data) {
         notify(data.content, data.type);
@@ -182,7 +182,7 @@ $(document).ready(function() {
     //adding options to the downdown list
     handlers["exercises"] = function(data) {    	
 	  $.each(data, function(field, exerciseName) {
-		  if(field != "kind") {		    
+		  if(field != "kind") {		    			 
 		    $('#example-loader').append($('<option></option>').val(field).html(exerciseName));
 		  }
 	  });
@@ -312,27 +312,28 @@ $(document).ready(function() {
     }
 
     var oldCode = ""
-
-    function recompile() {
-        var currentCode = editor.getValue()
-
+    function save(currentCode) {    	
         if (oldCode != "" && oldCode != currentCode) {
             if (forwardChanges.length == 0) {
                 storeCurrent(oldCode)
             }
-        }
-
+        }        
+        oldCode = currentCode;
+        lastSavedChange = lastChange;
+        updateSaveButton();
+    }
+    
+    function recompile() {
+    	currentCode = editor.getValue()
+        save(currentCode)
         if (connected) {
             var msg = JSON.stringify(
               {action: "doUpdateCode", code: currentCode}
-            )
-            oldCode = currentCode;
-            lastSavedChange = lastChange;
-            updateSaveButton();
+            )            
             leonSocket.send(msg)
         }
     }
-
+    
 /* Uncomment this if you want to recompile on-the-fly  
  *  function onCodeUpdate() {
         var now = new Date().getTime()
@@ -348,12 +349,9 @@ $(document).ready(function() {
     }*/
     
     handlers["exerciseDesc"] = function(data) {
-    	//replace "\n" in the description by "<br>"
-    	var desc = '<br />&nbsp;' + data.desc.replace(/\n/g,"<br />&nbsp;") +'<br />' 
-    	var formnote = $('<div><h3 class="std-background"><i class="icon-book"></i> Description: </h3><div>' 
-    			+ desc + '</div></div>')
-    	$("#description").empty();
-        $("#description").append(formnote);
+    	$('#desc').empty()
+    	$('#desc').html('<h3 class="std-background"><i class="icon-book"></i> Description:</h3>' +
+    						'<div id="desc-space">'+ data.desc +'</div>')    	    	
     }
 
     function loadSelectedExample() {
@@ -439,8 +437,10 @@ $(document).ready(function() {
         editor.gotoLine(0);
     }
     
-    $("#button-norm").click(function(event) {    	
-      var currentCode = editor.getValue()      
+    $("#button-norm").click(function(event) {      
+      var currentCode = editor.getValue()     
+      //first save the state
+      save(currentCode)
       var msg = JSON.stringify(
         {action: "normalize", code : currentCode }
       )
@@ -449,6 +449,8 @@ $(document).ready(function() {
 
     $("#button-check").click(function(event) {    	
       var currentCode = editor.getValue()
+      //first save the state
+        save(currentCode)
       //get 'id' of the selected problem
       var exId = $('#example-loader').find(":selected").val()
       if(exId == "")
@@ -461,8 +463,10 @@ $(document).ready(function() {
       }
     });
     
-    $("#button-hints").click(function(event) {    	
+    $("#button-hints").click(function(event) {    	      
       var currentCode = editor.getValue()
+      //first save the code
+      save(currentCode)
       var exId = $('#example-loader').find(":selected").val()
       if(exId == "")
     	  notify("Excercise not selected!", "error")
