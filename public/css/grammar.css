@@ -196,7 +196,7 @@ div#codebox {
 div #console {
     font-family: "Lucida Console", monospace;
     font-size: 12px;
-    height: 250px;
+    height: 500px;
     padding: 5px;
     white-space: pre-wrap;
     overflow-y: auto;

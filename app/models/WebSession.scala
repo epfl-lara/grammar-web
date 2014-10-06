@@ -188,13 +188,13 @@ class WebSession(remoteIP: String) extends Actor {
           case GrammarUtils.InLL1() => 
             true
           case ll1feedback =>
-            clientLog("LL(1) check failed.") 
+            clientLog("Warning: LL(1) check failed.") 
             clientLog(ll1feedback.toString)
             false
         }
       case _ => true
     }
-    if (ll1ok) {
+    //if (ll1ok) {
       val cnfG = CNFConverter.toCNF(plainGrammar)
       if (cnfG.rules.isEmpty) {
         clientLog("The grammar accepts/produces no strings! Check if all rules are reachable and productive !")
@@ -225,7 +225,7 @@ class WebSession(remoteIP: String) extends Actor {
             if (proveEquivalence(equivChecker.cnfRef, cnfG)) {
               clientLog("Correct.")
             } else
-              clientLog("Possibly correct but unable prove correctness.")
+              clientLog("Possibly correct but unable to prove correctness.")
           }
           case equivResult @ NotEquivalentNotAcceptedBySolution(ex) =>
             clientLog("The grammar does not accept the string: " + wordToString(ex))
@@ -235,7 +235,7 @@ class WebSession(remoteIP: String) extends Actor {
         }
         //clientLog(GrammarUtils.isLL1WithFeedback(plainGrammar).map("LL1:     " + _).getOrElse("LL1:     OK"))
       }
-    }
+    //}
     clientLog("===============")
     /*//for stats    
     val pr = new java.io.PrintWriter(quiz.quizName + "-stats.txt")
