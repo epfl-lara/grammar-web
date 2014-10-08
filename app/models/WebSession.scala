@@ -13,16 +13,14 @@ import play.api.libs.json.Writes._
 import akka.pattern.ask
 import play.api.Play.current
 import grammar.GrammarParser
-import grammar.exercises.Exercise
+import grammar.exercises._
 import grammar.EBNFGrammar.BNFGrammar
 import grammar.CFGrammar.Grammar
 import grammar.BNFConverter
 import parsing.CNFConverter
 import grammar.CFGrammar
-import grammar.exercises.LL1Exercise
-import grammar.exercises.ExerciseSet
 
-object ExerciseSet1 extends ExerciseSet(Play.getFile("/public/resources/ExerciseSet1.xml")) {  
+object database1 extends GrammarDatabase(Play.getFile("/public/resources/GrammarDatabase.xml")) {  
 }
 
 class WebSession(remoteIP: String) extends Actor {
@@ -72,14 +70,14 @@ class WebSession(remoteIP: String) extends Actor {
 
           case "getExerciseList" =>
             //read all exercises in the grammar package and send their names and ids to the clients
-            val exercises = ExerciseSet1.exercises 
+            val exercises = database1.grammars  
             val data = exercises.map(ex => (ex.id.toString -> toJson(ex.name))).toMap
             //val data = Map("ex1" -> toJson("Exercise 1"))
             event("exercises", data)
 
           case "loadExercise" =>
             val exid = (msg \ "exerciseId").as[String].toInt
-            val exercise = ExerciseSet1.exercises.find(_.id == exid)
+            val exercise = database1.grammars.find(_.id == exid)
             val data = exercise match {
               case None =>
                 Map("desc" -> toJson("There is no exercise with the given id"))
@@ -110,7 +108,7 @@ class WebSession(remoteIP: String) extends Actor {
 
           case "doCheck" =>
             val exid = (msg \ "exerciseId").as[String].toInt
-            val exercise = ExerciseSet1.exercises.find(_.id == exid)
+            val exercise = database1.grammars.find(_.id == exid)
             exercise match {
               case None =>
                 clientLog("There is no exercise with the given id")
@@ -122,11 +120,11 @@ class WebSession(remoteIP: String) extends Actor {
                 if (!bnfGrammar.isDefined)
                   clientLog("Parse Error:" + errstr)
                 else
-                  checkSolution(ex, bnfGrammar.get)
+                  checkGrammarSolution(ex, bnfGrammar.get)
             }
           case "getHints" =>
             val exid = (msg \ "exerciseId").as[String].toInt
-            val exercise = ExerciseSet1.exercises.find(_.id == exid)
+            val exercise = database1.grammars.find(_.id == exid)
             exercise match {
               case None =>
                 clientLog("There is no exercise with the given id")
@@ -165,11 +163,16 @@ class WebSession(remoteIP: String) extends Actor {
   import BNFConverter._
   import equivalence._
   import generators.LazyGenerator
-  import grammar.exercises.ExerciseSet
-  import grammar.exercises.Exercise
+  import grammar.exercises._
   import repair.RepairResult._
 
-  def checkSolution(ex: Exercise, studentGrammar: BNFGrammar) {
+  type SententialForm = List[Symbol]
+  def checkDerivation(ex: GrammarEntry, studentDerivation : List[SententialForm]) {
+    
+  }
+  
+  
+  def checkGrammarSolution(ex: GrammarEntry, studentGrammar: BNFGrammar) {
 
     val nOfTests = 100
     val debug = false
@@ -182,7 +185,7 @@ class WebSession(remoteIP: String) extends Actor {
     val plainGrammar = ebnfToGrammar(studentGrammar)
     //check if the exercise requires the grammar to be in LL1
     val ll1ok = ex match {
-      case _: LL1Exercise =>
+      case _: LL1GrammarEntry =>
         //check for LL1
         GrammarUtils.isLL1WithFeedback(plainGrammar) match {
           case GrammarUtils.InLL1() => 
@@ -251,7 +254,7 @@ class WebSession(remoteIP: String) extends Actor {
     }
   }
 
-  def provideHints(ex: Exercise, studentGrammar: BNFGrammar) {
+  def provideHints(ex: GrammarEntry, studentGrammar: BNFGrammar) {
 
     val nOfTests = 100
     val debug = false
