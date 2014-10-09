@@ -160,6 +160,13 @@ select#example-loader {
     font-size: 14px;
 }
 
+select#exercise-select {
+    margin: 10px;
+    padding: 3px;
+    width: 95%;
+    font-size: 14px;
+}
+
 img {
     border-style: none;
     border-width: 0px;

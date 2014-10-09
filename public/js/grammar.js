@@ -180,12 +180,15 @@ $(document).ready(function() {
     }
     
     //adding options to the downdown list
-    handlers["exercises"] = function(data) {    	
+    handlers["problems"] = function(data) {    	
+      $('#example-loader').empty()
+      $('#example-loader').append($('<option value="" selected="selected">--Select a problem--</option>'))
 	  $.each(data, function(field, exerciseName) {
-		  if(field != "kind") {		    			 
+		  if(field != "kind") {				  
 		    $('#example-loader').append($('<option></option>').val(field).html(exerciseName));
 		  }
 	  });
+      $('#example-loader').prop('disabled', false)
     }		
 
     var openEvent = function(event) {
@@ -195,8 +198,8 @@ $(document).ready(function() {
         {action: "hello"}
       )
       leonSocket.send(msg)
-      msg = JSON.stringify({action: "getExerciseList"})        
-      leonSocket.send(msg)
+      /*msg = JSON.stringify({action: "getExerciseList"})        
+      leonSocket.send(msg)*/
     }
 
     var lastReconnectDelay = 0;
@@ -353,10 +356,27 @@ $(document).ready(function() {
     	$('#desc').html('<h3 class="std-background"><i class="icon-book"></i> Description:</h3>' +
     						'<div id="desc-space">'+ data.desc +'</div>')    	    	
     }
+    
+
+    function loadProblems() {
+		var exid = $('#exercise-select').find(":selected").val()
+		if (exid == ""){
+			$('#example-loader').prop('disabled', true)
+			//notify("Excercise not selected!", "error")
+		}
+		else {
+			msg = JSON.stringify({
+				action : "getProblemList",
+				exerciseId : exid
+			})
+			leonSocket.send(msg)
+		}
+    }
 
     function loadSelectedExample() {
-        var value = $('#example-loader').find(":selected").val()        
-        var msg = JSON.stringify({action: "loadExercise", exerciseId : value})
+        var exid = $('#exercise-select').find(":selected").val()
+        var pid = $('#example-loader').find(":selected").val()        
+        var msg = JSON.stringify({action: "loadExercise", exerciseId : exid, problemId: pid})
         leonSocket.send(msg)
     }
 
@@ -384,6 +404,7 @@ $(document).ready(function() {
         }
     }
     
+    $("#exercise-select").change(loadProblems);
     $("#example-loader").change(loadSelectedExample);
 
     var editorSession = editor.getSession();
@@ -452,12 +473,16 @@ $(document).ready(function() {
       //first save the state
         save(currentCode)
       //get 'id' of the selected problem
-      var exId = $('#example-loader').find(":selected").val()
-      if(exId == "")
-    	  notify("Excercise not selected!", "error")
+	  var exid = $('#exercise-select').find(":selected").val()
+	  var pid = $('#example-loader').find(":selected").val()
+      //var pid = $('#example-loader').find(":selected").val()
+	  if(exid == "")
+		  notify("Excercise not selected!", "error")
+      if(pid == "")
+    	  notify("Problem not selected!", "error")
       else {
 	      var msg = JSON.stringify(
-	        {action: "doCheck", exerciseId: exId, code : currentCode }
+	        {action: "doCheck", exerciseId: exid, problemId : pid, code : currentCode }
 	      )
 	      leonSocket.send(msg)
       }

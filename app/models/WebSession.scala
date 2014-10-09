@@ -20,13 +20,13 @@ import grammar.BNFConverter
 import parsing.CNFConverter
 import grammar.CFGrammar
 
-object database1 extends GrammarDatabase(Play.getFile("/public/resources/GrammarDatabase.xml")) {  
+object database1 extends GrammarDatabase(Play.getFile("/public/resources/GrammarDatabase.xml")) {
 }
 
 class WebSession(remoteIP: String) extends Actor {
   import Protocol._
-  
-  val (enumerator, channel) = Concurrent.broadcast[JsValue]  
+
+  val (enumerator, channel) = Concurrent.broadcast[JsValue]
 
   def pushMessage(v: JsValue) = channel.push(v)
 
@@ -68,23 +68,48 @@ class WebSession(remoteIP: String) extends Actor {
             if (!bnf.isDefined)
               clientLog("Parse Error: " + errstr)
 
-          case "getExerciseList" =>
-            //read all exercises in the grammar package and send their names and ids to the clients
-            val exercises = database1.grammars  
-            val data = exercises.map(ex => (ex.id.toString -> toJson(ex.name))).toMap
-            //val data = Map("ex1" -> toJson("Exercise 1"))
-            event("exercises", data)
+          case "getProblemList" =>
+            //read all problems in the grammar database that suit the exercise selected
+            //and send their names and ids to the clients
+            val exid = (msg \ "exerciseId").as[String]
+            val grammarEntries = database1.grammars
+            if (exid == "grammar" || exid == "cnf" || exid == "gnf" || exid == "derivation") {
+              //send all grammarEntries
+              val data = grammarEntries.map(ge => (ge.id.toString -> toJson(ge.name))).toMap
+              event("problems", data)
+            } else if (exid == "epsilon") {
+              //for now send all grammars
+              //TODO: update this
+              val data = grammarEntries.map(ge => (ge.id.toString -> toJson(ge.name))).toMap
+              event("problems", data)
+            } else {
+              //log error message
+              clientLog("Exercise with id: " + exid + " does not exist")
+            }
 
           case "loadExercise" =>
-            val exid = (msg \ "exerciseId").as[String].toInt
-            val exercise = database1.grammars.find(_.id == exid)
-            val data = exercise match {
+            val pid = (msg \ "problemId").as[String].toInt
+            val data = database1.grammars.find(_.id == pid) match {
               case None =>
-                Map("desc" -> toJson("There is no exercise with the given id"))
-              case Some(ex) =>
-                Map("desc" -> toJson(ex.desc))
+                Map("desc" -> toJson("There is no grammar in the database with the given id: " + pid))
+              case Some(gentry) =>
+                val exid = (msg \ "exerciseId").as[String]
+                //for debugging
+                //clientLog("Exercise ID: "+exid+" grammar: "+gentry.reference)
+                Map("desc" -> toJson(generateProblemStatement(gentry, exid)))
             }
             event("exerciseDesc", data)
+
+          case "doCheck" =>
+            val pid = (msg \ "problemId").as[String].toInt
+            database1.grammars.find(_.id == pid) match {
+              case None =>
+                clientLog("There is no grammar in the database with the given id: " + pid)
+              case Some(gentry) =>
+                val exid = (msg \ "exerciseId").as[String]
+                val userAnswer = (msg \ "code").as[String]
+                checkSolution(gentry, exid, userAnswer)
+            }
 
           case "normalize" =>
             val grammar = (msg \ "code").as[String]
@@ -106,22 +131,6 @@ class WebSession(remoteIP: String) extends Actor {
               event("replace_grammar", data)
             }
 
-          case "doCheck" =>
-            val exid = (msg \ "exerciseId").as[String].toInt
-            val exercise = database1.grammars.find(_.id == exid)
-            exercise match {
-              case None =>
-                clientLog("There is no exercise with the given id")
-              case Some(ex) =>
-                val grammar = (msg \ "code").as[String]
-                val rules = grammar.split("\n").toList
-                //try to parse the grammar (syntax errors will be displayed in the console)
-                val (bnfGrammar, errstr) = (new GrammarParser()).parseGrammar(rules)
-                if (!bnfGrammar.isDefined)
-                  clientLog("Parse Error:" + errstr)
-                else
-                  checkGrammarSolution(ex, bnfGrammar.get)
-            }
           case "getHints" =>
             val exid = (msg \ "exerciseId").as[String].toInt
             val exercise = database1.grammars.find(_.id == exid)
@@ -144,6 +153,7 @@ class WebSession(remoteIP: String) extends Actor {
         }
       } catch {
         case t: Throwable =>
+          t.printStackTrace()
           clientError("Could not process event: " + t.getMessage)
       }
 
@@ -165,13 +175,93 @@ class WebSession(remoteIP: String) extends Actor {
   import generators.LazyGenerator
   import grammar.exercises._
   import repair.RepairResult._
+  import clients._
 
   type SententialForm = List[Symbol]
-  def checkDerivation(ex: GrammarEntry, studentDerivation : List[SententialForm]) {
-    
+  type Word = List[Terminal]
+
+  //minimum length of the word that has to be derived
+  val minWordLength = 5
+  val maxWordLength = 10
+  var wordForDerivation: Option[Word] = None
+
+  def generateProblemStatement(gentry: GrammarEntry, exid: String): String = exid match {
+    case "grammar" if gentry.isInstanceOf[LL1GrammarEntry] =>
+      "Provide a LL(1) grammar for " + gentry.desc
+    case "grammar" =>
+      "Provide a grammar for " + gentry.desc
+    //TODO: do not use reference grammar in the sequel
+    case "cnf" =>
+      "Convert the following grammar to CNF normal form " +
+        gentry.reference.toString
+    case "gnf" =>
+      "Convert the following grammar to GNF normal form " +
+        gentry.reference.toString
+    case "epsilon" =>
+      "Remove epsilon productions from the grammar " +
+        gentry.reference.toString
+    case "derivation" =>
+      //generate a word for derivation      
+      wordForDerivation = (new LazyGenerator(gentry.refGrammar)).genRandomWord(minWordLength, maxWordLength)
+      wordForDerivation match {
+        case None =>
+          "Cannot generate a word for the grammar of size: " + minWordLength
+        case Some(w) =>
+          "Provide a leftmost derivation for the word \"" + wordToString(w) +
+            "\" from the grammar " + gentry.reference.toString
+      }
+    case _ =>
+      "Exercise with id: " + exid + " does not exist"
   }
-  
-  
+
+  def checkSolution(gentry: GrammarEntry, exid: String, userAnswer: String) {
+
+    exid match {
+      case "grammar" =>
+        //here, we expect the user answer to be a grammar in EBNF form
+        val rules = userAnswer.split("\n").toList
+        //try to parse the grammar (syntax errors will be displayed in the console)
+        val (bnfGrammar, errstr) = (new GrammarParser()).parseGrammar(rules)
+        if (!bnfGrammar.isDefined)
+          clientLog("Parse Error:" + errstr)
+        else
+          checkGrammarSolution(gentry, bnfGrammar.get)
+      case "derivation" =>
+        //here, we expect the userAnswer to be a derivation
+        //parse the input string into derivation steps        
+        val (derivationSteps, errmsg) = (new GrammarParser()).parseSententialForms(
+          userAnswer.split("\n").toList, gentry.refGrammar)
+        if (derivationSteps.isDefined) {
+          //get the last word presented
+          if (wordForDerivation.isDefined){             
+            import DerivationChecker._
+            
+            DerivationChecker.checkLeftMostDerivation(wordForDerivation.get, 
+                derivationSteps.get, gentry.refGrammar) match {                            
+              case Correct() =>
+                 clientLog("Correct.")
+              case InvalidStart() =>
+                clientLog("Error: Derivation should start with: "+gentry.refGrammar.start)
+              case InvalidEnd() =>
+                clientLog("Error: Derivation should end with: "+wordToString(wordForDerivation.get))
+              case WrongStep(from,to,msg) => 
+                clientLog("Error: cannot derive \""+wordToString(to)+"\" form \""+wordToString(from)+"\""+": "+msg)
+              case Other(msg) => 
+                clientLog("Error: "+msg)
+            }            
+          }else
+            clientLog("Cannot find the word to derive. Select the problem and try again!")
+        } else
+          clientLog("Parse Error: " + errmsg)
+      //TODO: handle the following cases
+      /*case "cnf" =>     
+    case "gnf" =>      
+    case "epsilon" =>*/
+      case _ =>
+        "Exercise with id: " + exid + " is not supported"
+    }
+  }
+
   def checkGrammarSolution(ex: GrammarEntry, studentGrammar: BNFGrammar) {
 
     val nOfTests = 100
@@ -188,56 +278,55 @@ class WebSession(remoteIP: String) extends Actor {
       case _: LL1GrammarEntry =>
         //check for LL1
         GrammarUtils.isLL1WithFeedback(plainGrammar) match {
-          case GrammarUtils.InLL1() => 
+          case GrammarUtils.InLL1() =>
             true
           case ll1feedback =>
-            clientLog("Warning: LL(1) check failed.") 
+            clientLog("Warning: LL(1) check failed.")
             clientLog(ll1feedback.toString)
             false
         }
       case _ => true
     }
     //if (ll1ok) {
-      val cnfG = CNFConverter.toCNF(plainGrammar)
-      if (cnfG.rules.isEmpty) {
-        clientLog("The grammar accepts/produces no strings! Check if all rules are reachable and productive !")
-      } else {
+    val cnfG = CNFConverter.toCNF(plainGrammar)
+    if (cnfG.rules.isEmpty) {
+      clientLog("The grammar accepts/produces no strings! Check if all rules are reachable and productive !")
+    } else {
 
-        if (debug) {
-          clientLog("Your Grammar after normalization and epsilon removal: " + CNFConverter.cnfToGrammar(cnfG))
-          println("Plain Student's Grammar: " + plainGrammar)
-          println("Strings for student grammar: " + (new LazyGenerator(cnfG)).getIterator(30).map(_.mkString(" ")).mkString("\n"))
-          //System.exit(0)
-        }
-
-        val cfg = ebnfToGrammar(ex.reference)
-        val equivChecker = new EquivalenceChecker(cfg, nOfTests)
-        val repairer = new Repairer(equivChecker)
-        if (debug) {
-          /*println("Reference Grammar: ")
-    		println(ex.reference)*/
-          //println("Reference Grammar In GNF: " + GNFConverter.toGNF(equivChecker.cnfRef))      
-          println("Tests: " + equivChecker.words.take(30).map(_.mkString(" ")).mkString("\n"))
-        }
-
-        //println("Student Grammar In GNF: " + GNFConverter.toGNF(cnfG))
-        //proveEquivalence(equivChecker.cnfRef, cnfG)
-
-        equivChecker.isEquivalentTo(cnfG) match {
-          case equivResult @ PossiblyEquivalent() => {
-            if (proveEquivalence(equivChecker.cnfRef, cnfG)) {
-              clientLog("Correct.")
-            } else
-              clientLog("Possibly correct but unable to prove correctness.")
-          }
-          case equivResult @ NotEquivalentNotAcceptedBySolution(ex) =>
-            clientLog("The grammar does not accept the string: " + wordToString(ex))
-
-          case equivResult @ NotEquivalentNotGeneratedBySolution(ex) =>
-            clientLog("The grammar accepts the invalid string: " + wordToString(ex))
-        }
-        //clientLog(GrammarUtils.isLL1WithFeedback(plainGrammar).map("LL1:     " + _).getOrElse("LL1:     OK"))
+      if (debug) {
+        clientLog("Your Grammar after normalization and epsilon removal: " + CNFConverter.cnfToGrammar(cnfG))
+        println("Plain Student's Grammar: " + plainGrammar)
+        println("Strings for student grammar: " + (new LazyGenerator(cnfG)).getIterator(30).map(_.mkString(" ")).mkString("\n"))
+        //System.exit(0)
       }
+
+      val equivChecker = new EquivalenceChecker(ex.refGrammar, nOfTests)
+      val repairer = new Repairer(equivChecker)
+      if (debug) {
+        /*println("Reference Grammar: ")
+    		println(ex.reference)*/
+        //println("Reference Grammar In GNF: " + GNFConverter.toGNF(equivChecker.cnfRef))      
+        println("Tests: " + equivChecker.words.take(30).map(_.mkString(" ")).mkString("\n"))
+      }
+
+      //println("Student Grammar In GNF: " + GNFConverter.toGNF(cnfG))
+      //proveEquivalence(equivChecker.cnfRef, cnfG)
+
+      equivChecker.isEquivalentTo(cnfG) match {
+        case equivResult @ PossiblyEquivalent() => {
+          if (proveEquivalence(equivChecker.cnfRef, cnfG)) {
+            clientLog("Correct.")
+          } else
+            clientLog("Possibly correct but unable to prove correctness.")
+        }
+        case equivResult @ NotEquivalentNotAcceptedBySolution(ex) =>
+          clientLog("The grammar does not accept the string: " + wordToString(ex))
+
+        case equivResult @ NotEquivalentNotGeneratedBySolution(ex) =>
+          clientLog("The grammar accepts the invalid string: " + wordToString(ex))
+      }
+      //clientLog(GrammarUtils.isLL1WithFeedback(plainGrammar).map("LL1:     " + _).getOrElse("LL1:     OK"))
+    }
     //}
     clientLog("===============")
     /*//for stats    
@@ -281,8 +370,7 @@ class WebSession(remoteIP: String) extends Actor {
             //System.exit(0)
           }
 
-          val cfg = ebnfToGrammar(ex.reference)
-          val equivChecker = new EquivalenceChecker(cfg, nOfTests)
+          val equivChecker = new EquivalenceChecker(ex.refGrammar, nOfTests)
           val repairer = new Repairer(equivChecker)
           if (debug) {
             /*println("Reference Grammar: ")
