@@ -45,6 +45,7 @@ class WebSession(remoteIP: String) extends Actor {
     pushMessage(toJson(Map("kind" -> toJson(kind)) ++ data))
   }
 
+  //TODO: prevent user grammars from using hypens in the names of symbols
   def receive = {
     case Init =>
       sender ! InitSuccess(enumerator)
@@ -59,14 +60,15 @@ class WebSession(remoteIP: String) extends Actor {
             clientLog("Welcome!")
 
           case "doUpdateCode" =>
-            val grammar = (msg \ "code").as[String]
+            //create logs in this case
+            ;            
+            /*val grammar = (msg \ "code").as[String]
             val rules = grammar.split("\n").toList
-            //try to parse the grammar (syntax errors will be displayed to the console)
-            //TODO: prevent user grammars from using hypens in the names of symbols
+            //try to parse the grammar (syntax errors will be displayed to the console)            
             //it is reserved for newly created symbols
             val (bnf, errstr) = (new GrammarParser()).parseGrammar(rules)
             if (!bnf.isDefined)
-              clientLog("Parse Error: " + errstr)
+              clientLog("Parse Error: " + errstr)*/
 
           case "getProblemList" =>
             //read all problems in the grammar database that suit the exercise selected
@@ -216,6 +218,7 @@ class WebSession(remoteIP: String) extends Actor {
 
   def checkSolution(gentry: GrammarEntry, exid: String, userAnswer: String) {
 
+    clientLog("===============")
     exid match {
       case "grammar" =>
         //here, we expect the user answer to be a grammar in EBNF form
@@ -233,51 +236,88 @@ class WebSession(remoteIP: String) extends Actor {
           userAnswer.split("\n").toList, gentry.refGrammar)
         if (derivationSteps.isDefined) {
           //get the last word presented
-          if (wordForDerivation.isDefined){             
-            import DerivationChecker._
-            
-            DerivationChecker.checkLeftMostDerivation(wordForDerivation.get, 
-                derivationSteps.get, gentry.refGrammar) match {                            
-              case Correct() =>
-                 clientLog("Correct.")
-              case InvalidStart() =>
-                clientLog("Error: Derivation should start with: "+gentry.refGrammar.start)
-              case InvalidEnd() =>
-                clientLog("Error: Derivation should end with: "+wordToString(wordForDerivation.get))
-              case WrongStep(from,to,msg) => 
-                clientLog("Error: cannot derive \""+wordToString(to)+"\" form \""+wordToString(from)+"\""+": "+msg)
-              case Other(msg) => 
-                clientLog("Error: "+msg)
-            }            
-          }else
+          if (wordForDerivation.isDefined) {
+            checkDerivation(gentry, derivationSteps.get, wordForDerivation.get)
+          } else
             clientLog("Cannot find the word to derive. Select the problem and try again!")
         } else
           clientLog("Parse Error: " + errmsg)
-      //TODO: handle the following cases
-      /*case "cnf" =>     
-    case "gnf" =>      
-    case "epsilon" =>*/
+      case "cnf" =>
+        //here, we expect the user answer to be a grammar in EBNF form                        
+        val (bnfGrammar, errstr) = (new GrammarParser()).parseGrammar(userAnswer.split("\n").toList)
+        if (!bnfGrammar.isDefined)
+          clientLog("Parse Error:" + errstr)
+        else
+          checkCNFSolution(gentry, bnfGrammar.get)
+          
+      case "gnf" =>
+        //here, we expect the user answer to be a grammar in EBNF form                        
+        val (bnfGrammar, errstr) = (new GrammarParser()).parseGrammar(userAnswer.split("\n").toList)
+        if (!bnfGrammar.isDefined)
+          clientLog("Parse Error:" + errstr)
+        else
+          checkGNFSolution(gentry, bnfGrammar.get)
+        
+          //TODO: do we need this ? The normalize button already performs epsilon removal
+      /*case "epsilon" =>
+        //here, we expect the user answer to be a grammar in EBNF form                        
+        val (bnfGrammar, errstr) = (new GrammarParser()).parseGrammar(userAnswer.split("\n").toList)
+        if (!bnfGrammar.isDefined)
+          clientLog("Parse Error:" + errstr)
+        else
+          checkEpsilonSolution(gentry, bnfGrammar.get)*/
       case _ =>
         "Exercise with id: " + exid + " is not supported"
     }
+    clientLog("===============")
+  }   
+
+  def checkDerivation(gentry: GrammarEntry, derivationSteps: List[SententialForm], word: Word) {
+    import DerivationChecker._
+
+    DerivationChecker.checkLeftMostDerivation(word,
+      derivationSteps, gentry.refGrammar) match {
+        case Correct() =>
+          clientLog("Correct.")
+        case InvalidStart() =>
+          clientLog("Error: Derivation should start with: " + gentry.refGrammar.start)
+        case InvalidEnd() =>
+          clientLog("Error: Derivation should end with: " + wordToString(word))
+        case WrongStep(from, to, msg) =>
+          clientLog("Error: cannot derive \"" + wordToString(to) + "\" form \"" + wordToString(from) + "\"" + ": " + msg)
+        case Other(msg) =>
+          clientLog("Error: " + msg)
+      }
   }
 
-  def checkGrammarSolution(ex: GrammarEntry, studentGrammar: BNFGrammar) {
-
-    val nOfTests = 100
-    val debug = false
-
-    clientLog("===============")
-    /*println(ex.id + ": " + ex.name)
-    println(ex.desc)*/
-    //println("Evaluating solution ")
-
-    val plainGrammar = ebnfToGrammar(studentGrammar)
+  def checkCNFSolution(gentry: GrammarEntry, studentGrammar: BNFGrammar) {
+	val g = ebnfToGrammar(studentGrammar)
+	CFGrammar.getRuleNotInCNF(g) match {
+	  case None =>
+	  	checkEquivalence(gentry.refGrammar, g)	    
+	  case Some(Error(rule, msg)) => 
+	    clientLog("Rule not in CNF: "+rule+" : "+msg)
+	}
+  }
+  
+  def checkGNFSolution(gentry: GrammarEntry, studentGrammar: BNFGrammar) {
+	val g = ebnfToGrammar(studentGrammar)
+	CFGrammar.getRuleNotInGNF(g) match {
+	  case None =>
+	  	checkEquivalence(gentry.refGrammar, g)	    
+	  case Some(Error(rule, msg)) => 
+	    clientLog("Rule not in Greibach Normal Form: "+rule+" : "+msg)
+	}
+  }
+  
+  def checkGrammarSolution(gentry: GrammarEntry, studentGrammar: BNFGrammar) {
+    
+    val g = ebnfToGrammar(studentGrammar)
     //check if the exercise requires the grammar to be in LL1
-    val ll1ok = ex match {
+    val ll1ok = gentry match {
       case _: LL1GrammarEntry =>
         //check for LL1
-        GrammarUtils.isLL1WithFeedback(plainGrammar) match {
+        GrammarUtils.isLL1WithFeedback(g) match {
           case GrammarUtils.InLL1() =>
             true
           case ll1feedback =>
@@ -288,30 +328,30 @@ class WebSession(remoteIP: String) extends Actor {
       case _ => true
     }
     //if (ll1ok) {
-    val cnfG = CNFConverter.toCNF(plainGrammar)
+    checkEquivalence(gentry.refGrammar, g)    
+    //}
+    /*//for stats, remember stats    
+    val pr = new java.io.PrintWriter(quiz.quizName + "-stats.txt")
+    Stats.dumpStats(pr)
+    pr.close()*/
+  }
+
+  def checkEquivalence(ref: Grammar, g: Grammar) {
+    val nOfTests = 100
+    val debug = false
+
+    val cnfG = CNFConverter.toCNF(g)
     if (cnfG.rules.isEmpty) {
       clientLog("The grammar accepts/produces no strings! Check if all rules are reachable and productive !")
     } else {
-
       if (debug) {
-        clientLog("Your Grammar after normalization and epsilon removal: " + CNFConverter.cnfToGrammar(cnfG))
-        println("Plain Student's Grammar: " + plainGrammar)
-        println("Strings for student grammar: " + (new LazyGenerator(cnfG)).getIterator(30).map(_.mkString(" ")).mkString("\n"))
-        //System.exit(0)
+        clientLog("Grammar in CNF: " + cnfG)
+        println("Tests for g: " + (new LazyGenerator(g)).getIterator(30).map(_.mkString(" ")).mkString("\n"))
       }
-
-      val equivChecker = new EquivalenceChecker(ex.refGrammar, nOfTests)
-      val repairer = new Repairer(equivChecker)
+      val equivChecker = new EquivalenceChecker(ref, nOfTests)
       if (debug) {
-        /*println("Reference Grammar: ")
-    		println(ex.reference)*/
-        //println("Reference Grammar In GNF: " + GNFConverter.toGNF(equivChecker.cnfRef))      
         println("Tests: " + equivChecker.words.take(30).map(_.mkString(" ")).mkString("\n"))
       }
-
-      //println("Student Grammar In GNF: " + GNFConverter.toGNF(cnfG))
-      //proveEquivalence(equivChecker.cnfRef, cnfG)
-
       equivChecker.isEquivalentTo(cnfG) match {
         case equivResult @ PossiblyEquivalent() => {
           if (proveEquivalence(equivChecker.cnfRef, cnfG)) {
@@ -325,14 +365,7 @@ class WebSession(remoteIP: String) extends Actor {
         case equivResult @ NotEquivalentNotGeneratedBySolution(ex) =>
           clientLog("The grammar accepts the invalid string: " + wordToString(ex))
       }
-      //clientLog(GrammarUtils.isLL1WithFeedback(plainGrammar).map("LL1:     " + _).getOrElse("LL1:     OK"))
     }
-    //}
-    clientLog("===============")
-    /*//for stats    
-    val pr = new java.io.PrintWriter(quiz.quizName + "-stats.txt")
-    Stats.dumpStats(pr)
-    pr.close()*/
 
     def proveEquivalence(g1: Grammar, g2: Grammar): Boolean = {
       val verifier = new EquivalenceVerifier(g1, g2, nOfTests)
@@ -348,8 +381,6 @@ class WebSession(remoteIP: String) extends Actor {
     val nOfTests = 100
     val debug = false
 
-    clientLog("===============")
-
     if (BNFConverter.usesRegOp(studentGrammar)) {
       clientLog("The grammar is in EBNF form. Normalize the grammar.")
     } else {
@@ -362,26 +393,8 @@ class WebSession(remoteIP: String) extends Actor {
         if (cnfG.rules.isEmpty) {
           clientLog("The grammar is empty. Not all rules are produtive and reachable.")
         } else {
-
-          if (debug) {
-            clientLog("Your Grammar after normalization and epsilon removal: " + CNFConverter.cnfToGrammar(cnfG))
-            println("Plain Student's Grammar: " + plainGrammar)
-            println("Strings for student grammar: " + (new LazyGenerator(cnfG)).getIterator(30).map(_.mkString(" ")).mkString("\n"))
-            //System.exit(0)
-          }
-
           val equivChecker = new EquivalenceChecker(ex.refGrammar, nOfTests)
           val repairer = new Repairer(equivChecker)
-          if (debug) {
-            /*println("Reference Grammar: ")
-    		println(ex.reference)*/
-            //println("Reference Grammar In GNF: " + GNFConverter.toGNF(equivChecker.cnfRef))      
-            println("Tests: " + equivChecker.words.take(30).map(_.mkString(" ")).mkString("\n"))
-          }
-
-          //println("Student Grammar In GNF: " + GNFConverter.toGNF(cnfG))
-          //proveEquivalence(equivChecker.cnfRef, cnfG)
-
           equivChecker.isEquivalentTo(cnfG) match {
             case equivResult @ PossiblyEquivalent() => {
               clientLog("The grammar is probably correct. Try checking this grammar.")
@@ -398,8 +411,7 @@ class WebSession(remoteIP: String) extends Actor {
           }
         }
       }
-    }
-    clientLog("===============")
+    }   
     /*//for stats    
     val pr = new java.io.PrintWriter(quiz.quizName + "-stats.txt")
     Stats.dumpStats(pr)
