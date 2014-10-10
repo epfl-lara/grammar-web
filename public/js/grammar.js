@@ -179,6 +179,18 @@ $(document).ready(function() {
         }
     }
     
+  //adding options to the downdown list
+    handlers["exerciseTypes"] = function(data) {    	
+      $('#exercise-select').empty()      
+	  $.each(data, function(field, exerciseType) {
+		  if(field != "kind") {				  
+		    $('#exercise-select').append($('<option></option>').val(field).html(exerciseType));
+		  }
+	  });      
+      //load the problems of the selected exercise
+      loadProblems()
+    }
+    
     //adding options to the downdown list
     handlers["problems"] = function(data) {    	
       $('#example-loader').empty()
@@ -198,8 +210,8 @@ $(document).ready(function() {
         {action: "hello"}
       )
       leonSocket.send(msg)
-      /*msg = JSON.stringify({action: "getExerciseList"})        
-      leonSocket.send(msg)*/
+      msg = JSON.stringify({action: "getExerciseTypes"})        
+      leonSocket.send(msg)
     }
 
     var lastReconnectDelay = 0;

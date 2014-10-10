@@ -61,28 +61,29 @@ class WebSession(remoteIP: String) extends Actor {
 
           case "doUpdateCode" =>
             //create logs in this case
-            ;            
-            /*val grammar = (msg \ "code").as[String]
+            ;
+          /*val grammar = (msg \ "code").as[String]
             val rules = grammar.split("\n").toList
             //try to parse the grammar (syntax errors will be displayed to the console)            
             //it is reserved for newly created symbols
             val (bnf, errstr) = (new GrammarParser()).parseGrammar(rules)
             if (!bnf.isDefined)
               clientLog("Parse Error: " + errstr)*/
+          case "getExerciseTypes" =>
+            //read all exercises and send their names and ids to the clients                        
+            val data = ExerciseType.allExercises.map(exType =>
+              (exType.id.toString -> toJson(exType.toString))).toMap
+            event("exerciseTypes", data)
 
           case "getProblemList" =>
             //read all problems in the grammar database that suit the exercise selected
             //and send their names and ids to the clients
-            val exid = (msg \ "exerciseId").as[String]
-            val grammarEntries = database1.grammars
-            if (exid == "grammar" || exid == "cnf" || exid == "gnf" || exid == "derivation") {
+            val exid = (msg \ "exerciseId").as[String].toInt
+            val exType = ExerciseType.getExType(exid)
+            if (exType.isDefined) {
+              val grammarEntries = database1.entriesForExercise(exType.get)
               //send all grammarEntries
-              val data = grammarEntries.map(ge => (ge.id.toString -> toJson(ge.name))).toMap
-              event("problems", data)
-            } else if (exid == "epsilon") {
-              //for now send all grammars
-              //TODO: update this
-              val data = grammarEntries.map(ge => (ge.id.toString -> toJson(ge.name))).toMap
+              val data = generateProblemList(grammarEntries).map { case (k, v) => (k -> toJson(v)) }.toMap
               event("problems", data)
             } else {
               //log error message
@@ -91,26 +92,35 @@ class WebSession(remoteIP: String) extends Actor {
 
           case "loadExercise" =>
             val pid = (msg \ "problemId").as[String].toInt
-            val data = database1.grammars.find(_.id == pid) match {
+            val data = database1.grammarEntries.find(_.id == pid) match {
               case None =>
                 Map("desc" -> toJson("There is no grammar in the database with the given id: " + pid))
               case Some(gentry) =>
-                val exid = (msg \ "exerciseId").as[String]
-                //for debugging
+                val exid = (msg \ "exerciseId").as[String].toInt
+                val extype = ExerciseType.getExType(exid)
                 //clientLog("Exercise ID: "+exid+" grammar: "+gentry.reference)
-                Map("desc" -> toJson(generateProblemStatement(gentry, exid)))
+                if (extype.isDefined) {
+                  val data = Map("desc" -> toJson(generateProblemStatement(gentry, extype.get)))
+                  event("exerciseDesc", data)
+                } else
+                  //log error message
+                  clientLog("Exercise with id: " + exid + " does not exist")
             }
-            event("exerciseDesc", data)
 
           case "doCheck" =>
             val pid = (msg \ "problemId").as[String].toInt
-            database1.grammars.find(_.id == pid) match {
+            database1.grammarEntries.find(_.id == pid) match {
               case None =>
                 clientLog("There is no grammar in the database with the given id: " + pid)
               case Some(gentry) =>
-                val exid = (msg \ "exerciseId").as[String]
-                val userAnswer = (msg \ "code").as[String]
-                checkSolution(gentry, exid, userAnswer)
+                val exid = (msg \ "exerciseId").as[String].toInt
+                val extype = ExerciseType.getExType(exid)
+                if (extype.isDefined) {
+                  val userAnswer = (msg \ "code").as[String]
+                  checkSolution(gentry, extype.get, userAnswer)
+                } else
+                  //log error message
+                  clientLog("Exercise with id: " + exid + " does not exist")
             }
 
           case "normalize" =>
@@ -135,7 +145,7 @@ class WebSession(remoteIP: String) extends Actor {
 
           case "getHints" =>
             val exid = (msg \ "exerciseId").as[String].toInt
-            val exercise = database1.grammars.find(_.id == exid)
+            val exercise = database1.grammarEntries.find(_.id == exid)
             exercise match {
               case None =>
                 clientLog("There is no exercise with the given id")
@@ -178,6 +188,7 @@ class WebSession(remoteIP: String) extends Actor {
   import grammar.exercises._
   import repair.RepairResult._
   import clients._
+  import ExerciseType._
 
   type SententialForm = List[Symbol]
   type Word = List[Terminal]
@@ -187,22 +198,38 @@ class WebSession(remoteIP: String) extends Actor {
   val maxWordLength = 10
   var wordForDerivation: Option[Word] = None
 
-  def generateProblemStatement(gentry: GrammarEntry, exid: String): String = exid match {
-    case "grammar" if gentry.isInstanceOf[LL1GrammarEntry] =>
+  def generateProblemList(gentries: Seq[GrammarEntry]): Seq[(String, String)] = {
+    //track the number of problems with the same name
+    var seenNames = Set[String]()
+    def getUniqueName(name: String, index: Int = 0): String = {
+      val nname = if (index == 0)
+        name
+      else
+        name + " " + index
+      if (seenNames.contains(nname)) {
+        getUniqueName(name, index + 1)
+      } else nname
+    }
+    gentries.map(ge => {
+      val newname = getUniqueName(ge.name)
+      seenNames += newname
+      (ge.id.toString -> newname)
+    })
+  }
+
+  def generateProblemStatement(gentry: GrammarEntry, extype: ExType): String = extype match {
+    case GrammarEx if gentry.isLL1Entry =>
       "Provide a LL(1) grammar for " + gentry.desc
-    case "grammar" =>
+    case GrammarEx =>
       "Provide a grammar for " + gentry.desc
     //TODO: do not use reference grammar in the sequel
-    case "cnf" =>
+    case CNFEx =>
       "Convert the following grammar to CNF normal form " +
         gentry.reference.toString
-    case "gnf" =>
+    case GNFEx =>
       "Convert the following grammar to GNF normal form " +
         gentry.reference.toString
-    case "epsilon" =>
-      "Remove epsilon productions from the grammar " +
-        gentry.reference.toString
-    case "derivation" =>
+    case DerivationEx =>
       //generate a word for derivation      
       wordForDerivation = (new LazyGenerator(gentry.refGrammar)).genRandomWord(minWordLength, maxWordLength)
       wordForDerivation match {
@@ -212,15 +239,13 @@ class WebSession(remoteIP: String) extends Actor {
           "Provide a leftmost derivation for the word \"" + wordToString(w) +
             "\" from the grammar " + gentry.reference.toString
       }
-    case _ =>
-      "Exercise with id: " + exid + " does not exist"
   }
 
-  def checkSolution(gentry: GrammarEntry, exid: String, userAnswer: String) {
+  def checkSolution(gentry: GrammarEntry, extype: ExType, userAnswer: String) {
 
     clientLog("===============")
-    exid match {
-      case "grammar" =>
+    extype match {
+      case GrammarEx =>
         //here, we expect the user answer to be a grammar in EBNF form
         val rules = userAnswer.split("\n").toList
         //try to parse the grammar (syntax errors will be displayed in the console)
@@ -229,7 +254,7 @@ class WebSession(remoteIP: String) extends Actor {
           clientLog("Parse Error:" + errstr)
         else
           checkGrammarSolution(gentry, bnfGrammar.get)
-      case "derivation" =>
+      case DerivationEx =>
         //here, we expect the userAnswer to be a derivation
         //parse the input string into derivation steps        
         val (derivationSteps, errmsg) = (new GrammarParser()).parseSententialForms(
@@ -242,35 +267,24 @@ class WebSession(remoteIP: String) extends Actor {
             clientLog("Cannot find the word to derive. Select the problem and try again!")
         } else
           clientLog("Parse Error: " + errmsg)
-      case "cnf" =>
+      case CNFEx =>
         //here, we expect the user answer to be a grammar in EBNF form                        
         val (bnfGrammar, errstr) = (new GrammarParser()).parseGrammar(userAnswer.split("\n").toList)
         if (!bnfGrammar.isDefined)
           clientLog("Parse Error:" + errstr)
         else
           checkCNFSolution(gentry, bnfGrammar.get)
-          
-      case "gnf" =>
+
+      case GNFEx =>
         //here, we expect the user answer to be a grammar in EBNF form                        
         val (bnfGrammar, errstr) = (new GrammarParser()).parseGrammar(userAnswer.split("\n").toList)
         if (!bnfGrammar.isDefined)
           clientLog("Parse Error:" + errstr)
         else
           checkGNFSolution(gentry, bnfGrammar.get)
-        
-          //TODO: do we need this ? The normalize button already performs epsilon removal
-      /*case "epsilon" =>
-        //here, we expect the user answer to be a grammar in EBNF form                        
-        val (bnfGrammar, errstr) = (new GrammarParser()).parseGrammar(userAnswer.split("\n").toList)
-        if (!bnfGrammar.isDefined)
-          clientLog("Parse Error:" + errstr)
-        else
-          checkEpsilonSolution(gentry, bnfGrammar.get)*/
-      case _ =>
-        "Exercise with id: " + exid + " is not supported"
     }
     clientLog("===============")
-  }   
+  }
 
   def checkDerivation(gentry: GrammarEntry, derivationSteps: List[SententialForm], word: Word) {
     import DerivationChecker._
@@ -291,44 +305,42 @@ class WebSession(remoteIP: String) extends Actor {
   }
 
   def checkCNFSolution(gentry: GrammarEntry, studentGrammar: BNFGrammar) {
-	val g = ebnfToGrammar(studentGrammar)
-	CFGrammar.getRuleNotInCNF(g) match {
-	  case None =>
-	  	checkEquivalence(gentry.refGrammar, g)	    
-	  case Some(Error(rule, msg)) => 
-	    clientLog("Rule not in CNF: "+rule+" : "+msg)
-	}
+    val g = ebnfToGrammar(studentGrammar)
+    CFGrammar.getRuleNotInCNF(g) match {
+      case None =>
+        checkEquivalence(gentry.refGrammar, g)
+      case Some(Error(rule, msg)) =>
+        clientLog("Rule not in CNF: " + rule + " : " + msg)
+    }
   }
-  
+
   def checkGNFSolution(gentry: GrammarEntry, studentGrammar: BNFGrammar) {
-	val g = ebnfToGrammar(studentGrammar)
-	CFGrammar.getRuleNotInGNF(g) match {
-	  case None =>
-	  	checkEquivalence(gentry.refGrammar, g)	    
-	  case Some(Error(rule, msg)) => 
-	    clientLog("Rule not in Greibach Normal Form: "+rule+" : "+msg)
-	}
+    val g = ebnfToGrammar(studentGrammar)
+    CFGrammar.getRuleNotInGNF(g) match {
+      case None =>
+        checkEquivalence(gentry.refGrammar, g)
+      case Some(Error(rule, msg)) =>
+        clientLog("Rule not in Greibach Normal Form: " + rule + " : " + msg)
+    }
   }
-  
+
   def checkGrammarSolution(gentry: GrammarEntry, studentGrammar: BNFGrammar) {
-    
+
     val g = ebnfToGrammar(studentGrammar)
     //check if the exercise requires the grammar to be in LL1
-    val ll1ok = gentry match {
-      case _: LL1GrammarEntry =>
-        //check for LL1
-        GrammarUtils.isLL1WithFeedback(g) match {
-          case GrammarUtils.InLL1() =>
-            true
-          case ll1feedback =>
-            clientLog("Warning: LL(1) check failed.")
-            clientLog(ll1feedback.toString)
-            false
-        }
-      case _ => true
-    }
+    val ll1ok = if (gentry.isLL1Entry) {
+      //check for LL1
+      GrammarUtils.isLL1WithFeedback(g) match {
+        case GrammarUtils.InLL1() =>
+          true
+        case ll1feedback =>
+          clientLog("Warning: LL(1) check failed.")
+          clientLog(ll1feedback.toString)
+          false
+      }
+    } else true
     //if (ll1ok) {
-    checkEquivalence(gentry.refGrammar, g)    
+    checkEquivalence(gentry.refGrammar, g)
     //}
     /*//for stats, remember stats    
     val pr = new java.io.PrintWriter(quiz.quizName + "-stats.txt")
@@ -411,7 +423,7 @@ class WebSession(remoteIP: String) extends Actor {
           }
         }
       }
-    }   
+    }
     /*//for stats    
     val pr = new java.io.PrintWriter(quiz.quizName + "-stats.txt")
     Stats.dumpStats(pr)
