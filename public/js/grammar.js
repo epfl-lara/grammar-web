@@ -1,5 +1,6 @@
 var editor = null;
 
+/** Loads when the document is ready */
 $(document).ready(function() {
     editor = ace.edit("codebox");
     var aceRange = ace.require("ace/range").Range;
@@ -22,6 +23,7 @@ $(document).ready(function() {
 
     var lastMarker = -1;
 
+    /** Menu buttons can enable or disable targets, e.g. synthesize window. */
     $(".menu-button").click(function(event) {
         var target = $(this).attr("ref")
         var sel = "#"+target
@@ -36,11 +38,13 @@ $(document).ready(function() {
 
     });
 
+    /** Save menu button */
     $("#button-save").click(function(event) {
         recompile()
         event.preventDefault()
     });
 
+    /** Undo menu button */
     $("#button-undo").click(function(event) {
         if (!$(this).hasClass("disabled")) {
             doUndo()
@@ -48,6 +52,7 @@ $(document).ready(function() {
         event.preventDefault()
     });
 
+    /** Redo menu button */
     $("#button-redo").click(function(event) {
         if (!$(this).hasClass("disabled")) {
             doRedo()
@@ -55,6 +60,7 @@ $(document).ready(function() {
         event.preventDefault()
     });
 
+    /** Returns true if it the page allows for local storage */
     function hasLocalStorage() {
       try {
         return 'localStorage' in window && window['localStorage'] !== null;
@@ -159,6 +165,9 @@ $(document).ready(function() {
         var txt = $("#console")
         txt.append(data.message+"\n");
         txt.scrollTop(txt[0].scrollHeight - txt.height())
+        if(data.message.substr(0, 5) != "=====") {
+          addFeedback(data.message)
+        }
     }
 
     var receiveEvent = function(event) {
@@ -201,7 +210,49 @@ $(document).ready(function() {
 		  }
 	  });
       $('#example-loader').prop('disabled', false)
-    }		
+    }
+    
+    // Used to merge feedbacks if they are too close.
+    var lastTitle = "";
+    var lastTime = 0;
+    var eventTitle = "Console";
+    
+    /** Adds a feedback to the feedback column, and fade/removes the old ones */
+    var addFeedback = function(text, title) {
+      if(typeof title == "undefined") title = eventTitle;
+      var newTime = new Date().getTime();
+      if(title == lastTitle && newTime - lastTime < 400) {
+        // If it is the same feedback/
+        var prevFeedback = $("#feedbackcolumn .action .feedback").first()
+        prevFeedback.text(prevFeedback.text() + "\n" + text);
+        return;
+      }
+      lastTime = newTime;
+      lastTitle = title;
+    
+      var feedback = $("<div>").addClass("action");
+      var close = $("<div>").text("close").addClass("closeButton").css("position","absolute").css("right","0px").css("z-index","1000").click((function(f) {return (function() {f.remove();});})(feedback));
+      feedback.append(close)
+      if(typeof title !== "undefined") {
+        feedback.append($("<h3>").text(title));
+      }
+      feedback.append($("<div>").addClass("feedback").text(text));
+      $("#feedbackcolumn").find(".action").each(function(index, elem) {
+        if(index > 4) {
+          $(elem).hide("blind")
+          setTimeout(function() { $(elem).hide(); }, 400);
+        } else {
+          $(elem).animate({opacity: 1.0/(index + 2)}, 500);
+        }
+      });
+      feedback.click(function() { $(this).css("opacity", 1);});
+      feedback.insertAfter($("#feedbackcolumn #notifications"))
+      feedback.hide();
+      //.prepend(feedback);
+      setTimeout( function() { feedback.show("blind"); }, 50);
+    }
+    //addFeedback("Perhaps you should consider drinking soda", "Hint")
+    //addFeedback("Perhaps you should consider drinking coke", "Error")
 
     var openEvent = function(event) {
       setConnected()
@@ -448,7 +499,7 @@ $(document).ready(function() {
         $('#codecolumn').height(h);
         $('#actionscolumn').height(h);
         $('#leoninput').height(h).width(w);
-        $('#codebox').height(h).width(w);
+        $('#codebox').height(h).width("100%");
 
         editor.resize();
     };
@@ -481,6 +532,7 @@ $(document).ready(function() {
     });
 
     $("#button-check").click(function(event) {    	
+      eventTitle = "Solution check";
       var currentCode = editor.getValue()
       //first save the state
         save(currentCode)
@@ -500,7 +552,8 @@ $(document).ready(function() {
       }
     });
     
-    $("#button-hints").click(function(event) {    	      
+    $("#button-hints").click(function(event) {
+      eventTitle = "Hint";
       var currentCode = editor.getValue()
       //first save the code
       save(currentCode)
