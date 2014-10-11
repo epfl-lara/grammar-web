@@ -140,7 +140,7 @@ div#feedbackcolumn {
     margin-left: 0px;
 }
 #feedbackcolumn h3 {
-  background-color: blue;
+  background-color: #347235;
 }
 .feedback {
   font-family: "Lucida Console", monospace;
@@ -235,7 +235,7 @@ div#codebox {
 div #console {
     font-family: "Lucida Console", monospace;
     font-size: 12px;
-    height: 500px;
+    height: 250px;
     padding: 5px;
     white-space: pre-wrap;
     overflow-y: auto;

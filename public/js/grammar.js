@@ -163,11 +163,12 @@ $(document).ready(function() {
 
     handlers["console"] = function (data) {
         var txt = $("#console")
-        txt.append(data.message+"\n");
+        txt.append("===============\n")
+        txt.append(data.message+"\n");        
         txt.scrollTop(txt[0].scrollHeight - txt.height())
-        if(data.message.substr(0, 5) != "=====") {
-          addFeedback(data.message)
-        }
+        //if(data.message.substr(0, 5) != "=====") {
+        addFeedback(data.message)
+        //}
     }
 
     var receiveEvent = function(event) {

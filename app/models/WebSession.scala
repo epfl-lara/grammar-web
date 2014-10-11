@@ -242,8 +242,7 @@ class WebSession(remoteIP: String) extends Actor {
   }
 
   def checkSolution(gentry: GrammarEntry, extype: ExType, userAnswer: String) {
-
-    clientLog("===============")
+    
     extype match {
       case GrammarEx =>
         //here, we expect the user answer to be a grammar in EBNF form
@@ -282,8 +281,7 @@ class WebSession(remoteIP: String) extends Actor {
           clientLog("Parse Error:" + errstr)
         else
           checkGNFSolution(gentry, bnfGrammar.get)
-    }
-    clientLog("===============")
+    }    
   }
 
   def checkDerivation(gentry: GrammarEntry, derivationSteps: List[SententialForm], word: Word) {
