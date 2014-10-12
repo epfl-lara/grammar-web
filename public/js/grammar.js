@@ -160,15 +160,26 @@ $(document).ready(function() {
     handlers["notification"] = function (data) {
         notify(data.content, data.type);
     }
+    
+    function enableConsoleButtons() {
+    	$("#button-check").removeClass("disabled")
+    	$("#button-hints").removeClass("disabled")    	
+    }
+    
+    function disableConsoleButtons() {    	
+    	$("#button-check").addClass("disabled")
+    	$("#button-hints").addClass("disabled")
+    }
 
     handlers["console"] = function (data) {
         var txt = $("#console")
         txt.append("===============\n")
         txt.append(data.message+"\n");        
-        txt.scrollTop(txt[0].scrollHeight - txt.height())
-        //if(data.message.substr(0, 5) != "=====") {
+        txt.scrollTop(txt[0].scrollHeight - txt.height())       
         addFeedback(data.message)
-        //}
+        
+        //enable "check" and "hints" button
+        enableConsoleButtons()
     }
 
     var receiveEvent = function(event) {
@@ -531,41 +542,66 @@ $(document).ready(function() {
       )
       leonSocket.send(msg)
     });
-
-    $("#button-check").click(function(event) {    	
-      eventTitle = "Solution check";
+      
+    function doCheck() {
+      eventTitle = "Solution check";    	       
       var currentCode = editor.getValue()
       //first save the state
-        save(currentCode)
+      save(currentCode)
       //get 'id' of the selected problem
-	  var exid = $('#exercise-select').find(":selected").val()
-	  var pid = $('#example-loader').find(":selected").val()
-      //var pid = $('#example-loader').find(":selected").val()
-	  if(exid == "")
-		  notify("Excercise not selected!", "error")
-      if(pid == "")
-    	  notify("Problem not selected!", "error")
-      else {
-	      var msg = JSON.stringify(
-	        {action: "doCheck", exerciseId: exid, problemId : pid, code : currentCode }
-	      )
-	      leonSocket.send(msg)
-      }
+  	  var exid = $('#exercise-select').find(":selected").val()
+  	  var pid = $('#example-loader').find(":selected").val()
+        //var pid = $('#example-loader').find(":selected").val()
+  	  if(exid == "")
+  		  notify("Excercise not selected!", "error")
+        if(pid == "")
+      	  notify("Problem not selected!", "error")
+        else {
+          //disable "check" and "hints" button
+          disableConsoleButtons() 
+  	      var msg = JSON.stringify(
+  	        {action: "doCheck", exerciseId: exid, problemId : pid, code : currentCode }
+  	      )
+  	      leonSocket.send(msg)          
+        }
+    }    
+    
+    function requestHint() {
+    	eventTitle = "Hint";          	    	  	
+        var currentCode = editor.getValue()
+        //first save the code
+        save(currentCode)
+        var exId = $('#example-loader').find(":selected").val()
+        if(exId == "")
+      	  notify("Excercise not selected!", "error")
+        else {
+          //disable "check" and "hints" button
+    	  disableConsoleButtons()
+  	      var msg = JSON.stringify(
+  	        {action: "getHints", exerciseId: exId, code : currentCode }
+  	      )
+  	      leonSocket.send(msg)  	      
+        }
+    }
+    
+    $("#button-check").click(function(event) {
+    	if (!$(this).hasClass("disabled")) {
+            doCheck()
+        }
+        event.preventDefault() 
     });
     
     $("#button-hints").click(function(event) {
-      eventTitle = "Hint";
-      var currentCode = editor.getValue()
-      //first save the code
-      save(currentCode)
-      var exId = $('#example-loader').find(":selected").val()
-      if(exId == "")
-    	  notify("Excercise not selected!", "error")
-      else {
-	      var msg = JSON.stringify(
-	        {action: "getHints", exerciseId: exId, code : currentCode }
-	      )
-	      leonSocket.send(msg)
-      }
+    	if (!$(this).hasClass("disabled")) {
+            requestHint()
+        }
+        event.preventDefault()      
+    });
+    
+    $("#button-abort").click(function(event) {
+        eventTitle = "Abort";        
+  	    var msg = JSON.stringify({action: "abortOps" })
+  	    leonSocket.send(msg)        
+  	    enableConsoleButtons()
     });
 });

@@ -30,14 +30,14 @@ object Application extends Controller {
   def openConsole() = WebSocket.tryAccept[JsValue] { request =>
     import play.api.Play.current
 
-    val session = Akka.system.actorOf(Props(new models.WebSession(request.remoteAddress)))
+    val session = Akka.system.actorOf(Props(new models.WebSession(request.remoteAddress)))   
     implicit val timeout = Timeout(1.seconds)
 
     (session ? Init).map {
       case InitSuccess(enumerator) =>
         // Create an Iteratee to consume the feed
         val iteratee = Iteratee.foreach[JsValue] { event =>
-          session ! FromClient(event)
+          session ! FromClient(event)          
         }.map { _ =>
           session ! Quit
         }

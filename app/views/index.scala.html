@@ -11,6 +11,7 @@
         <a id="button-norm" href="#"><i class="icon-caret-right"></i> <span>Normalize</span></a>        
         <a id="button-check" href="#"><i class="icon-caret-right"></i> <span>Check this Solution</span></a>
         <a id="button-hints" href="#"><i class="icon-magic"></i> <span>Hints</span></a>        
+        <a id="button-abort" href="#"><i class="icon-stop"></i> <span>Abort</span></a></a>
       </div>
     </div>
     <script>
@@ -26,6 +27,19 @@
                 </div>
                 <div id="feedbackcolumn" class="span4">
                   <div id="notifications">
+                  </div>
+                  <div id="disconnectError" class="error alert alert-error fade hide in">
+                      <a class="close" data-dismiss="alert" href="#">&times;</a>
+                      <h4>Failed to connect</h4>
+                      <p>The server appears to be unreachable right now.</p>
+                      <p id="disconnectMsg"></p>
+                      <p></p>
+                  </div>
+                  <div id="connectError" class="error alert alert-error fade hide in">
+                      <a class="close" data-dismiss="alert" href="#">&times;</a>
+                      <h4>Failed to connect</h4>
+                      <p>Failed to contact the mothership :(</p>
+                      <p>It usually indicates that your firewall blocks traffic on websocket ports.</p>
                   </div>
                 </div>
                 <div id="actionscolumn" class="span4">
@@ -47,23 +61,6 @@
                       <h3 class="std-background"><i class="icon-comments-alt"></i> Console:</h3>
                       <div id="console"></div>
                   </div>
-
-                  <div id="disconnectError" class="error alert alert-error fade hide in">
-                      <a class="close" data-dismiss="alert" href="#">&times;</a>
-                      <h4>Failed to connect</h4>
-                      <p>The server appears to be unreachable right now.</p>
-                      <p id="disconnectMsg"></p>
-                      <p></p>
-                  </div>
-
-                  <div id="connectError" class="error alert alert-error fade hide in">
-                      <a class="close" data-dismiss="alert" href="#">&times;</a>
-                      <h4>Failed to connect</h4>
-                      <p>Failed to contact the mothership :(</p>
-                      <p>It usually indicates that your firewall blocks traffic on websocket ports.</p>
-                  </div>
-
-                  
                 </div>
           </div>
     </div>
