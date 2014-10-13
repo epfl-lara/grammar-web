@@ -50,21 +50,24 @@ class WebSession(remoteIP: String) extends Actor {
   }
 
   //a list operation futures
-  var currentOp : Option[Future[String]] = None
+  var currentOp: Option[Future[String]] = None
   def recordFuture(opfuture: Future[String]) {
-    currentOp = Some(opfuture) 
+    currentOp = Some(opfuture)
     //register a call-back
     opfuture onComplete {
       case Success(resstr) =>
         //check if the future has been super-seeded other operations,
         //in which case ignore the result
-        if(currentOp == Some(opfuture))
-          clientLog(resstr)          
-        //else do nothing            
+        if (currentOp == Some(opfuture))
+          clientLog(resstr)
+      //else do nothing            
       case Failure(msg) =>
-        if(currentOp == Some(opfuture))
-          clientLog("Operation aborted abnormally")                
-    }    
+        if (currentOp == Some(opfuture)){
+          clientLog("Operation aborted abnormally")
+          //print the exception to the console
+          println(msg)
+        }
+    }
   }
 
   def receive = {
@@ -230,6 +233,7 @@ class WebSession(remoteIP: String) extends Actor {
   //minimum length of the word that has to be derived
   val minWordLength = 5
   val maxWordLength = 10
+  val maxIndexToExplore = 500
   //TODO: this is not thread safe, make this thread safe by extracting the string from
   //the problem statement
   var wordForDerivation: Option[Word] = None
@@ -257,7 +261,7 @@ class WebSession(remoteIP: String) extends Actor {
     case GrammarEx if gentry.isLL1Entry =>
       "Provide a LL(1) grammar for " + gentry.desc
     case GrammarEx =>
-      "Provide a grammar for " + gentry.desc    
+      "Provide a grammar for " + gentry.desc
     case CNFEx =>
       "Convert the following grammar to CNF normal form " +
         gentry.reference.toString
@@ -266,7 +270,8 @@ class WebSession(remoteIP: String) extends Actor {
         gentry.reference.toString
     case DerivationEx =>
       //generate a word for derivation      
-      wordForDerivation = (new LazyGenerator(gentry.cnfRef)).genRandomWord(minWordLength, maxWordLength)
+      wordForDerivation = (new LazyGenerator(gentry.cnfRef)).genRandomWord(minWordLength,
+        maxWordLength, maxIndexToExplore)
       wordForDerivation match {
         case None =>
           "Cannot generate a word for the grammar of size: " + minWordLength
@@ -384,7 +389,7 @@ class WebSession(remoteIP: String) extends Actor {
   def checkEquivalence(ref: Grammar, g: Grammar): String = {
     val nOfTests = 100
     val debug = false
-    
+
     def proveEquivalence(g1: Grammar, g2: Grammar): Boolean = {
       val verifier = new EquivalenceVerifier(g1, g2, nOfTests)
       verifier.proveEquivalence() match {
@@ -399,36 +404,35 @@ class WebSession(remoteIP: String) extends Actor {
     } else {
       if (debug) {
         clientLog("Grammar in CNF: " + cnfG)
-        println("Tests for g: " + (new LazyGenerator(cnfG)).getIterator(30).map(_.mkString(" ")).mkString("\n"))
       }
       val equivChecker = new EquivalenceChecker(ref, nOfTests)
-      if (debug) {
-        println("Tests: " + equivChecker.words.take(30).map(_.mkString(" ")).mkString("\n"))
-      }
       equivChecker.isEquivalentTo(cnfG) match {
-        case equivResult @ PossiblyEquivalent() => {
+        case PossiblyEquivalent => {
           if (proveEquivalence(equivChecker.cnfRef, cnfG)) {
             "Correct."
           } else
             "Possibly correct but unable to prove correctness."
         }
-        case equivResult @ NotEquivalentNotAcceptedBySolution(ex) =>
+        case InadequateTestcases =>
+          "Cannot generate enough testcases to prove correctness.\n" +
+            "Make the grammar less ambiguous and try again!"
+        case NotEquivalentNotAcceptedBySolution(ex) =>
           "The grammar does not accept the string: " + wordToString(ex)
 
-        case equivResult @ NotEquivalentNotGeneratedBySolution(ex) =>
+        case NotEquivalentNotGeneratedBySolution(ex) =>
           "The grammar accepts the invalid string: " + wordToString(ex)
       }
     }
   }
 
   def provideHints(ex: GrammarEntry, studentGrammar: BNFGrammar): String = {
-    
+
     val debug = false
     val nOfTests = 100
-    
-    def prettyPrintFeedbacks(cnfG: Grammar, resG: Grammar, feedbacks: List[GrammarFeedback]) = {
+
+    def prettyPrintFeedbacks(inG: Grammar, resG: Grammar, feedbacks: List[GrammarFeedback]) = {
       //pretty print feedbacks by renaming new non-terminals to simpler names
-      val newnonterms = nonterminals(resG) -- nonterminals(cnfG)
+      val newnonterms = nonterminals(resG) -- nonterminals(inG)
       val renameMap = genRenameMap(newnonterms, nonterminals(resG))
       feedbacks.map(f => {
         val feedbackString = f match {
@@ -442,6 +446,8 @@ class WebSession(remoteIP: String) extends Actor {
           case ExpandRules(olds, news) =>
             "First, expand the righside of the rule: " + olds.mkString("", "\n", "\n") +
               "as: " + replace(news, renameMap).mkString("\n")
+          case NoRepair =>
+            "Cannot provide hints."
         }
         feedbackString
       }).mkString("\n")
@@ -462,18 +468,20 @@ class WebSession(remoteIP: String) extends Actor {
           val equivChecker = new EquivalenceChecker(ex.cnfRef, nOfTests)
           val repairer = new Repairer(equivChecker)
           equivChecker.isEquivalentTo(cnfG) match {
-            case equivResult @ PossiblyEquivalent() => {
+            case equivResult @ PossiblyEquivalent =>
               "The grammar is probably correct. Try checking this grammar."
-            }
+            case InadequateTestcases =>
+              "Cannot generate enough testcases to perform repair.\n" +
+                "Make the grammar less ambiguous and try again!"
             case equivResult @ NotEquivalentNotAcceptedBySolution(ex) =>
               val (resG, feedbacks) = repairer.hint(cnfG, equivResult)
               "To accept the string: " + wordToString(ex) + "\n" +
-                prettyPrintFeedbacks(cnfG, resG, feedbacks)
+                prettyPrintFeedbacks(plainGrammar, resG, feedbacks)
 
             case equivResult @ NotEquivalentNotGeneratedBySolution(ex) =>
               val (resG, feedbacks) = repairer.hint(cnfG, equivResult)
               "To block the string: " + wordToString(ex) + "\n" +
-                prettyPrintFeedbacks(cnfG, resG, feedbacks)
+                prettyPrintFeedbacks(plainGrammar, resG, feedbacks)
           }
         }
       }
