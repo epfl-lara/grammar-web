@@ -58,16 +58,29 @@ class WebSession(remoteIP: String) extends Actor {
       case Success(resstr) =>
         //check if the future has been super-seeded other operations,
         //in which case ignore the result
-        if (currentOp == Some(opfuture))
+        if (currentOp == Some(opfuture)){
           clientLog(resstr)
+          //enable the do check and hint events
+          enableEvents(List("doCheck","getHints"))
+        }
       //else do nothing            
       case Failure(msg) =>
-        if (currentOp == Some(opfuture)){
+        if (currentOp == Some(opfuture)) {
           clientLog("Operation aborted abnormally")
           //print the exception to the console
           println(msg)
         }
     }
+  }
+
+  def disableEvents(events: List[String]) {
+    val emptymsg = toJson("")
+    event("disableEvents", events.map(_ -> emptymsg).toMap)
+  }
+
+  def enableEvents(events: List[String]) {
+    val emptymsg = toJson("")
+    event("enableEvents", events.map(_ -> emptymsg).toMap)
   }
 
   def receive = {
@@ -86,6 +99,17 @@ class WebSession(remoteIP: String) extends Actor {
           case "abortOps" =>
             //clear the currentOps
             currentOp = None
+            //enable disabled events. However, do not enable more than allowed by the context
+            val exid = (msg \ "exerciseId").as[String].toInt
+            val exType = ExerciseType.getExType(exid)
+            exType match {
+              case Some(ExerciseType.GrammarEx) =>
+                enableEvents(List("getHints", "doCheck"))
+              case Some(_) => enableEvents(List("doCheck"))
+              case None =>
+                //here, enable all to be safe
+                enableEvents(List("getHints", "doCheck"))
+            }
 
           case "doUpdateCode" =>
             //create logs in this case
@@ -113,6 +137,11 @@ class WebSession(remoteIP: String) extends Actor {
               //send all grammarEntries
               val data = generateProblemList(grammarEntries).map { case (k, v) => (k -> toJson(v)) }.toMap
               event("problems", data)
+              exType.get match {
+                //leave doCheck untouched
+                case ExerciseType.GrammarEx => enableEvents(List("getHints", "normalize"))
+                case _ => disableEvents(List("getHints", "normalize"))
+              }
             } else {
               //log error message
               clientLog("Exercise with id: " + exid + " does not exist")
@@ -149,6 +178,8 @@ class WebSession(remoteIP: String) extends Actor {
                   recordFuture(Future {
                     checkSolution(gentry, extype.get, userAnswer)
                   })
+                  //disable check and hints event, leave 'normalize' untouched              
+                  disableEvents(List("getHints", "doCheck"))
 
                 } else
                   //log error message
@@ -176,8 +207,8 @@ class WebSession(remoteIP: String) extends Actor {
             }
 
           case "getHints" =>
-            val exid = (msg \ "exerciseId").as[String].toInt
-            val exercise = database1.grammarEntries.find(_.id == exid)
+            val pid = (msg \ "problemId").as[String].toInt
+            val exercise = database1.grammarEntries.find(_.id == pid)
             exercise match {
               case None =>
                 clientLog("There is no exercise with the given id")
@@ -193,8 +224,9 @@ class WebSession(remoteIP: String) extends Actor {
                   recordFuture(Future {
                     provideHints(ex, bnfGrammar.get)
                   })
+                  //disable hints and do-check, leave normalized untouched
+                  disableEvents(List("getHints", "doCheck"))
                 }
-
             }
 
           case _ =>
@@ -241,8 +273,8 @@ class WebSession(remoteIP: String) extends Actor {
   def generateProblemList(gentries: Seq[GrammarEntry]): Seq[(String, String)] = {
     //track the number of problems with the same name
     var seenNames = Set[String]()
-    def getUniqueName(name: String, index: Int = 0): String = {
-      val nname = if (index == 0)
+    def getUniqueName(name: String, index: Int = 1): String = {
+      val nname = if (index == 1)
         name
       else
         name + " " + index
@@ -264,10 +296,10 @@ class WebSession(remoteIP: String) extends Actor {
       "Provide a grammar for " + gentry.desc
     case CNFEx =>
       "Convert the following grammar to CNF normal form " +
-        gentry.reference.toString
+        gentry.reference.toHTMLString
     case GNFEx =>
       "Convert the following grammar to GNF normal form " +
-        gentry.reference.toString
+        gentry.reference.toHTMLString
     case DerivationEx =>
       //generate a word for derivation      
       wordForDerivation = (new LazyGenerator(gentry.cnfRef)).genRandomWord(minWordLength,
@@ -277,7 +309,7 @@ class WebSession(remoteIP: String) extends Actor {
           "Cannot generate a word for the grammar of size: " + minWordLength
         case Some(w) =>
           "Provide a leftmost derivation for the word \"" + wordToString(w) +
-            "\" from the grammar " + gentry.reference.toString
+            "\" from the grammar " + gentry.reference.toHTMLString
       }
   }
 

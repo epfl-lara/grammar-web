@@ -161,7 +161,7 @@ $(document).ready(function() {
         notify(data.content, data.type);
     }
     
-    function enableConsoleButtons() {
+   /* function enableConsoleButtons() {
     	$("#button-check").removeClass("disabled")
     	$("#button-hints").removeClass("disabled")    	
     }
@@ -169,17 +169,14 @@ $(document).ready(function() {
     function disableConsoleButtons() {    	
     	$("#button-check").addClass("disabled")
     	$("#button-hints").addClass("disabled")
-    }
+    }*/
 
     handlers["console"] = function (data) {
         var txt = $("#console")
         txt.append("===============\n")
         txt.append(data.message+"\n");        
         txt.scrollTop(txt[0].scrollHeight - txt.height())       
-        addFeedback(data.message)
-        
-        //enable "check" and "hints" button
-        enableConsoleButtons()
+        addFeedback(data.message)        
     }
 
     var receiveEvent = function(event) {
@@ -198,6 +195,31 @@ $(document).ready(function() {
         if (connected) {
             setDisconnected()
         }
+    }
+    
+    //disable, enable even handler
+    handlers["disableEvents"] = function(data){
+    	$.each(data, function(field, value) {  		      		
+  			if(field == "normalize")
+  				$('#button-norm').addClass("disabled")
+  			else if(field == "getHints")  				
+  				$('#button-hints').addClass("disabled")
+  			else if(field == "doCheck")  				
+  				$('#button-check').addClass("disabled")
+  			//add more events here if necessary  		      		  
+  	  });
+    }
+    
+    handlers["enableEvents"] = function(data){    	
+    	$.each(data, function(field, value) {     		
+  			if(field == 'normalize')
+  				$('#button-norm').removeClass('disabled')
+  			else if(field == 'getHints')
+  				$('#button-hints').removeClass('disabled')
+  			else if(field == "doCheck")  				
+  				$('#button-check').removeClass("disabled")
+  			//add more events here if necessary  		      		  
+  	  });
     }
     
   //adding options to the downdown list
@@ -444,7 +466,7 @@ $(document).ready(function() {
 				action : "getProblemList",
 				exerciseId : exid
 			})
-			leonSocket.send(msg)
+			leonSocket.send(msg)						
 		}
     }
 
@@ -533,14 +555,17 @@ $(document).ready(function() {
         editor.gotoLine(0);
     }
     
-    $("#button-norm").click(function(event) {      
-      var currentCode = editor.getValue()     
-      //first save the state
-      save(currentCode)
-      var msg = JSON.stringify(
-        {action: "normalize", code : currentCode }
-      )
-      leonSocket.send(msg)
+    $("#button-norm").click(function(event) {
+    	if (!$(this).hasClass("disabled")) {
+	      var currentCode = editor.getValue()     
+	      //first save the state
+	      save(currentCode)
+	      var msg = JSON.stringify(
+	        {action: "normalize", code : currentCode }
+	      )
+	      leonSocket.send(msg)
+    	}
+    	event.preventDefault() 
     });
       
     function doCheck() {
@@ -556,9 +581,7 @@ $(document).ready(function() {
   		  notify("Excercise not selected!", "error")
         if(pid == "")
       	  notify("Problem not selected!", "error")
-        else {
-          //disable "check" and "hints" button
-          disableConsoleButtons() 
+        else {          
   	      var msg = JSON.stringify(
   	        {action: "doCheck", exerciseId: exid, problemId : pid, code : currentCode }
   	      )
@@ -571,14 +594,12 @@ $(document).ready(function() {
         var currentCode = editor.getValue()
         //first save the code
         save(currentCode)
-        var exId = $('#example-loader').find(":selected").val()
-        if(exId == "")
-      	  notify("Excercise not selected!", "error")
-        else {
-          //disable "check" and "hints" button
-    	  disableConsoleButtons()
+        var pid = $('#example-loader').find(":selected").val()
+        if(pid == "")
+      	  notify("Problem not selected!", "error")
+        else {          
   	      var msg = JSON.stringify(
-  	        {action: "getHints", exerciseId: exId, code : currentCode }
+  	        {action: "getHints", problemId: pid, code : currentCode }
   	      )
   	      leonSocket.send(msg)  	      
         }
@@ -598,10 +619,14 @@ $(document).ready(function() {
         event.preventDefault()      
     });
     
-    $("#button-abort").click(function(event) {
+    $("#button-abort").click(function(event) {    
         eventTitle = "Abort";        
-  	    var msg = JSON.stringify({action: "abortOps" })
-  	    leonSocket.send(msg)        
-  	    enableConsoleButtons()
+        var extype = $('#exercise-select').find(":selected").val()
+        if(extype == "")
+      	  notify("Select the exercise that you were solving!", "error")
+        else {          
+  	      var msg = JSON.stringify({action: "abortOps", exerciseId: exId })  	        
+  	      leonSocket.send(msg)
+        }
     });
 });
