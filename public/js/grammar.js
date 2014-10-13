@@ -625,7 +625,7 @@ $(document).ready(function() {
         if(extype == "")
       	  notify("Select the exercise that you were solving!", "error")
         else {          
-  	      var msg = JSON.stringify({action: "abortOps", exerciseId: exId })  	        
+  	      var msg = JSON.stringify({action: "abortOps", exerciseId: extype })  	        
   	      leonSocket.send(msg)
         }
     });

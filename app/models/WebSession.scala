@@ -21,6 +21,7 @@ import grammar.CFGrammar
 import java.util.concurrent.Executors
 import scala.util.Success
 import scala.util.Failure
+import grammar.exercises.ExerciseType
 
 object database1 extends GrammarDatabase(Play.getFile("/public/resources/GrammarDatabase.xml")) {
 }
@@ -51,7 +52,7 @@ class WebSession(remoteIP: String) extends Actor {
 
   //a list operation futures
   var currentOp: Option[Future[String]] = None
-  def recordFuture(opfuture: Future[String]) {
+  def recordFuture(opfuture: Future[String], extype : Option[ExerciseType.ExType]) {
     currentOp = Some(opfuture)
     //register a call-back
     opfuture onComplete {
@@ -59,9 +60,16 @@ class WebSession(remoteIP: String) extends Actor {
         //check if the future has been super-seeded other operations,
         //in which case ignore the result
         if (currentOp == Some(opfuture)){
-          clientLog(resstr)
-          //enable the do check and hint events
-          enableEvents(List("doCheck","getHints"))
+          clientLog(resstr)          
+          extype match {
+            case Some(ExerciseType.GrammarEx) =>
+              enableEvents(List("doCheck","getHints"))
+            case Some(_) => 
+              enableEvents(List("doCheck"))
+            case _ => 
+              //allow every thing here
+              enableEvents(List("doCheck","getHints"))
+          }                     
         }
       //else do nothing            
       case Failure(msg) =>
@@ -175,9 +183,10 @@ class WebSession(remoteIP: String) extends Actor {
                 if (extype.isDefined) {
                   val userAnswer = (msg \ "code").as[String]
                   //create a future for the operation and add it to the futures list
-                  recordFuture(Future {
+                  val checkFuture = Future {
                     checkSolution(gentry, extype.get, userAnswer)
-                  })
+                  }                  
+                  recordFuture(checkFuture, extype)
                   //disable check and hints event, leave 'normalize' untouched              
                   disableEvents(List("getHints", "doCheck"))
 
@@ -221,9 +230,10 @@ class WebSession(remoteIP: String) extends Actor {
                   clientLog("Parse Error:" + errstr)
                 else {
                   //create a future for the operation and add it to the futures list
-                  recordFuture(Future {
+                  val hintFuture = Future {
                     provideHints(ex, bnfGrammar.get)
-                  })
+                  }                                    
+                  recordFuture(hintFuture, None)
                   //disable hints and do-check, leave normalized untouched
                   disableEvents(List("getHints", "doCheck"))
                 }
