@@ -1,6 +1,6 @@
 var editor = null;
 
-var licenceAgreementTitle = "License Agreement";
+var licenceAgreementTitle = "Consent for Data Collection";
 var licenceAccept = "I accept";
 var licenceDecline = "I decline";
 var licenceAgreement = "I hereby accept that my data are recorded for research purpose and for improving the system, " +
