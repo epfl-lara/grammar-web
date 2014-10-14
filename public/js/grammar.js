@@ -3,7 +3,8 @@ var editor = null;
 var licenceAgreementTitle = "License Agreement";
 var licenceAccept = "I accept";
 var licenceDecline = "I decline";
-var licenceAgreement = "I hereby accept that my data are recorded for research purpose and for improving the system efficiency, provided that all data are anonymized.<br/> By Clicking on '"+licenceAccept+"', I accept a cookie lasting for 1 week.";
+var licenceAgreement = "I hereby accept that my data are recorded for research purpose and for improving the system, " +
+		"provided that all data are anonymized.<br/> By Clicking on '"+licenceAccept+"', I accept a cookie lasting for 1 week.";
 var LICENCE_COOKIE_DAYS_EXPIRE = 7;
 var LICENCE_COOKIE = "LicenceCookie";
 var LICENCE_COOKIE_ACCEPTED = "LicenseAccepted";
@@ -323,17 +324,22 @@ $(document).ready(function() {
       feedback.hide();
       //.prepend(feedback);
       setTimeout( function() {
-        feedback.show("blind");
-        setTimeout( function() {
+        feedback.show("blind");      
+        $("#feedbackcolumn").find(".action").each(function(index, elem) {
+	        if(index >= 1) {
+	        	$(elem).remove();
+	        }
+        });
+        /*setTimeout( function() {
           $("#feedbackcolumn").find(".action").each(function(index, elem) {
-            if(index >= 1) {
+            if(index >= 1) {            	
               $(elem).hide("blind")
-              setTimeout(function() { $(elem).remove(); }, 400);
-            } /*else {
+              //setTimeout(function() { $(elem).remove(); }, 400);
+            } else {
               $(elem).animate({opacity: 1.0/(index + 2)}, 500);
-            }*/
+            }
           });
-        }, 300);
+        }, 300);*/
       }, 50);
     }
     //addFeedback("Perhaps you should consider drinking soda", "Hint")
@@ -485,8 +491,7 @@ $(document).ready(function() {
         }
     }
     
-/* Uncomment this if you want to recompile on-the-fly  
- *  function onCodeUpdate() {
+    function onCodeUpdate() {
         var now = new Date().getTime()
 
         if (lastChange < (now - timeWindow)) {
@@ -495,9 +500,8 @@ $(document).ready(function() {
                 recompile()
             }
         }
-
-        localStorage.setItem("leonEditorCode", editor.getValue());
-    }*/
+        localStorage.setItem("editorCode", editor.getValue());
+    }
     
     handlers["exerciseDesc"] = function(data) {
     	$('#desc').empty()
@@ -575,7 +579,7 @@ $(document).ready(function() {
     editorSession.on('change', function(e) {
         lastChange = new Date().getTime();
         updateSaveButton();
-        //setTimeout(onCodeUpdate, timeWindow+50)
+        setTimeout(onCodeUpdate, timeWindow+50)
     });
 
     function resizeEditor() {
@@ -601,7 +605,7 @@ $(document).ready(function() {
         editorSession.setValue(data.grammar)        
     }
 
-    var storedCode = localStorage.getItem("leonEditorCode")
+    var storedCode = localStorage.getItem("editorCode")
 
     if (storedCode != null) {
         editor.setValue(storedCode);

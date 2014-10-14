@@ -177,12 +177,12 @@ div#actionscolumn {
     overflow-y: auto;
 }
 
-div#feedbackcolumn {
+div#feedbackcolumn {	
     padding-right: 20px;
     overflow-y: auto;
     vertical-align: top;
     display: inline-block;
-    margin-left: 0px;
+    margin-left: 0px;    
 }
 #feedbackcolumn h3 {
   background-color: #347235;

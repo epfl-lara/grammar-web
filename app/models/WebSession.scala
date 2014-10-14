@@ -22,6 +22,9 @@ import java.util.concurrent.Executors
 import scala.util.Success
 import scala.util.Failure
 import grammar.exercises.ExerciseType
+import play.Logger
+import java.util.Calendar
+import java.io.File
 
 object database1 extends GrammarDatabase(Play.getFile("/public/resources/GrammarDatabase.xml")) {
 }
@@ -31,45 +34,53 @@ class WebSession(remoteIP: String) extends Actor {
   //creating a thread pool for futures
   implicit val ec = ExecutionContext.fromExecutor(Executors.newFixedThreadPool(2))
 
+  val eventLogger = {
+    val filename = new java.text.SimpleDateFormat("yyyy-MM-dd-HH-mm-ss").format(new java.util.Date())
+    val newfile = new File("logs/" + filename + ".log")
+    newfile.createNewFile()
+    new java.io.PrintWriter(newfile)
+  }
+
   val (enumerator, channel) = Concurrent.broadcast[JsValue]
 
   def pushMessage(v: JsValue) = channel.push(v)
 
   def clientLog(msg: String) = {
-    Logger.info("[>] L: " + msg)
+    eventLogger.println("[>] L: " + msg)
+    eventLogger.flush()
     pushMessage(toJson(Map("kind" -> "console", "level" -> "log", "message" -> msg)))
   }
 
   def clientError(msg: String) = {
-    Logger.info("[>] E: " + msg)
+    eventLogger.println("[>] E: " + msg)
+    eventLogger.flush()
     pushMessage(toJson(Map("kind" -> "console", "level" -> "error", "message" -> msg)))
   }
 
-  def event(kind: String, data: Map[String, JsValue]) = {
-    Logger.info("[>] " + kind)
+  def event(kind: String, data: Map[String, JsValue]) = {    
     pushMessage(toJson(Map("kind" -> toJson(kind)) ++ data))
   }
 
   //a list operation futures
   var currentOp: Option[Future[String]] = None
-  def recordFuture(opfuture: Future[String], extype : Option[ExerciseType.ExType]) {
+  def recordFuture(opfuture: Future[String], extype: Option[ExerciseType.ExType]) {
     currentOp = Some(opfuture)
     //register a call-back
     opfuture onComplete {
       case Success(resstr) =>
         //check if the future has been super-seeded other operations,
         //in which case ignore the result
-        if (currentOp == Some(opfuture)){
-          clientLog(resstr)          
+        if (currentOp == Some(opfuture)) {
+          clientLog(resstr)
           extype match {
             case Some(ExerciseType.GrammarEx) =>
-              enableEvents(List("doCheck","getHints"))
-            case Some(_) => 
+              enableEvents(List("doCheck", "getHints"))
+            case Some(_) =>
               enableEvents(List("doCheck"))
-            case _ => 
+            case _ =>
               //allow every thing here
-              enableEvents(List("doCheck","getHints"))
-          }                     
+              enableEvents(List("doCheck", "getHints"))
+          }
         }
       //else do nothing            
       case Failure(msg) =>
@@ -98,7 +109,8 @@ class WebSession(remoteIP: String) extends Actor {
 
     case FromClient(msg) =>
       try {
-        Logger.info("[<] " + msg)
+        eventLogger.println("[<] " + msg)
+        eventLogger.flush()
 
         (msg \ "action").as[String] match {
           case "hello" =>
@@ -119,11 +131,9 @@ class WebSession(remoteIP: String) extends Actor {
                 enableEvents(List("getHints", "doCheck"))
             }
 
-          case "doUpdateCode" =>
-            //create logs in this case
-            ;
-          /*val grammar = (msg \ "code").as[String]
-            val rules = grammar.split("\n").toList
+          case "doUpdateCode" =>             
+            ;            
+          /*val rules = grammar.split("\n").toList
             //try to parse the grammar (syntax errors will be displayed to the console)            
             //it is reserved for newly created symbols
             val (bnf, errstr) = (new GrammarParser()).parseGrammar(rules)
@@ -185,7 +195,7 @@ class WebSession(remoteIP: String) extends Actor {
                   //create a future for the operation and add it to the futures list
                   val checkFuture = Future {
                     checkSolution(gentry, extype.get, userAnswer)
-                  }                  
+                  }
                   recordFuture(checkFuture, extype)
                   //disable check and hints event, leave 'normalize' untouched              
                   disableEvents(List("getHints", "doCheck"))
@@ -232,7 +242,7 @@ class WebSession(remoteIP: String) extends Actor {
                   //create a future for the operation and add it to the futures list
                   val hintFuture = Future {
                     provideHints(ex, bnfGrammar.get)
-                  }                                    
+                  }
                   recordFuture(hintFuture, None)
                   //disable hints and do-check, leave normalized untouched
                   disableEvents(List("getHints", "doCheck"))
@@ -249,6 +259,8 @@ class WebSession(remoteIP: String) extends Actor {
       }
 
     case Quit =>
+      //close the log file here
+      eventLogger.close()
 
     case msg =>
       clientError("Unknown message: " + msg)
@@ -408,19 +420,17 @@ class WebSession(remoteIP: String) extends Actor {
 
     val g = ebnfToGrammar(studentGrammar)
     //check if the exercise requires the grammar to be in LL1
-    val ll1ok = if (gentry.isLL1Entry) {
+    val ll1feedback = if (gentry.isLL1Entry) {
       //check for LL1
       GrammarUtils.isLL1WithFeedback(g) match {
-        case GrammarUtils.InLL1() =>
-          true
+        case GrammarUtils.InLL1() => ""          
         case ll1feedback =>
-          clientLog("Warning: LL(1) check failed.")
-          clientLog(ll1feedback.toString)
-          false
+          "Warning: LL(1) check failed.\n" + 
+          	ll1feedback.toString + "\n"          
       }
-    } else true
+    } else ""      
     //if (ll1ok) {
-    checkEquivalence(gentry.cnfRef, g)
+    ll1feedback + checkEquivalence(gentry.cnfRef, g)
     //}
     /*//for stats, remember stats    
     val pr = new java.io.PrintWriter(quiz.quizName + "-stats.txt")
