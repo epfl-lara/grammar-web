@@ -1,5 +1,13 @@
 var editor = null;
 
+var licenceAgreementTitle = "License Agreement";
+var licenceAccept = "I accept";
+var licenceDecline = "I decline";
+var licenceAgreement = "I hereby accept that my data are recorded for research purpose and for improving the system efficiency, provided that all data are anonymized.<br/> By Clicking on '"+licenceAccept+"', I accept a cookie lasting for 1 week.";
+var LICENCE_COOKIE_DAYS_EXPIRE = 7;
+var LICENCE_COOKIE = "LicenceCookie";
+var LICENCE_COOKIE_ACCEPTED = "LicenseAccepted";
+
 /** Loads when the document is ready */
 $(document).ready(function() {
     editor = ace.edit("codebox");
@@ -11,8 +19,47 @@ $(document).ready(function() {
     editor.setShowPrintMargin(false);
     editor.setAutoScrollEditorIntoView();
     editor.setHighlightActiveLine(false);
-    editor.getSession().setTabSize(2)
-
+    editor.getSession().setTabSize(2);
+    
+    function setCookie(cname, cvalue, exdays) {
+      var d = new Date();
+      d.setTime(d.getTime() + (exdays*24*60*60*1000));
+      var expires = "expires="+d.toUTCString();
+      document.cookie = cname + "=" + cvalue + "; " + expires;
+    }
+    
+    function getCookie(cname) {
+      var name = cname + "=";
+      var ca = document.cookie.split(';');
+      for(var i=0; i<ca.length; i++) {
+          var c = ca[i];
+          while (c.charAt(0)==' ') c = c.substring(1);
+          if (c.indexOf(name) != -1) return c.substring(name.length,c.length);
+      }
+      return "";
+    }
+    
+    if(getCookie(LICENCE_COOKIE) != LICENCE_COOKIE_ACCEPTED) {
+      var dialogDiv = $('<div>').addClass("ui-dialog");
+      document.cookie
+      var backgroundDiv = $('<div>').addClass("background-dialog")
+      $("body").prepend(backgroundDiv);
+      backgroundDiv.append(dialogDiv);
+      dialogDiv.append($('<h3>').text(licenceAgreementTitle))
+      dialogDiv.append(licenceAgreement+"<br/>");
+      var positiveButton = $('<div>').addClass("button positive").text(licenceAccept);
+      var negativeButton = $('<div>').addClass("button negative").text(licenceDecline);
+      dialogDiv.append(positiveButton)
+      dialogDiv.append(negativeButton)
+      positiveButton.click(function() {
+        setCookie(LICENCE_COOKIE, LICENCE_COOKIE_ACCEPTED, LICENCE_COOKIE_DAYS_EXPIRE);
+        backgroundDiv.remove();
+      });
+      negativeButton.click(function() {
+        dialogDiv.remove();
+        $("body").animate({opacity: 0}, {duration: 400, complete: function() { $("body").empty(); }})
+      });
+    }
 
     var hash = window.location.hash
 
@@ -265,25 +312,29 @@ $(document).ready(function() {
       lastTitle = title;
     
       var feedback = $("<div>").addClass("action");
-      var close = $("<div>").text("close").addClass("closeButton").css("position","absolute").css("right","0px").css("z-index","1000").click((function(f) {return (function() {f.remove();});})(feedback));
+      var close = $("<div>").text("X").addClass("closeButton").css("position","absolute").css("right","0px").css("z-index","1000").click((function(f) {return (function() {f.remove();});})(feedback));
       feedback.append(close)
       if(typeof title !== "undefined") {
         feedback.append($("<h3>").text(title));
       }
       feedback.append($("<div>").addClass("feedback").text(text));
-      $("#feedbackcolumn").find(".action").each(function(index, elem) {
-        if(index > 4) {
-          $(elem).hide("blind")
-          setTimeout(function() { $(elem).hide(); }, 400);
-        } else {
-          $(elem).animate({opacity: 1.0/(index + 2)}, 500);
-        }
-      });
       feedback.click(function() { $(this).css("opacity", 1);});
       feedback.insertAfter($("#feedbackcolumn #notifications"))
       feedback.hide();
       //.prepend(feedback);
-      setTimeout( function() { feedback.show("blind"); }, 50);
+      setTimeout( function() {
+        feedback.show("blind");
+        setTimeout( function() {
+          $("#feedbackcolumn").find(".action").each(function(index, elem) {
+            if(index >= 1) {
+              $(elem).hide("blind")
+              setTimeout(function() { $(elem).remove(); }, 400);
+            } /*else {
+              $(elem).animate({opacity: 1.0/(index + 2)}, 500);
+            }*/
+          });
+        }, 300);
+      }, 50);
     }
     //addFeedback("Perhaps you should consider drinking soda", "Hint")
     //addFeedback("Perhaps you should consider drinking coke", "Error")
