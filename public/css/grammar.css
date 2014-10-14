@@ -168,7 +168,7 @@ a#button-compilation span.label {
 
 div#codecolumn {
     min-height: 100%;
-    width: 36.5%;
+    width: 46.3%;
 }
 
 div#actionscolumn {
@@ -178,6 +178,7 @@ div#actionscolumn {
 }
 
 div#feedbackcolumn {	
+    width: 22%;
     padding-right: 20px;
     overflow-y: auto;
     vertical-align: top;

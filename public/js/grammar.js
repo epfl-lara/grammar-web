@@ -297,7 +297,7 @@ $(document).ready(function() {
     // Used to merge feedbacks if they are too close.
     var lastTitle = "";
     var lastTime = 0;
-    var eventTitle = "Console";
+    var eventTitle = "Output";
     
     /** Adds a feedback to the feedback column, and fade/removes the old ones */
     var addFeedback = function(text, title) {
