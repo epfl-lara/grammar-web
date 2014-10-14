@@ -507,18 +507,21 @@ $(document).ready(function() {
     
 
     function loadProblems() {
-		var exid = $('#exercise-select').find(":selected").val()
-		if (exid == ""){
-			$('#example-loader').prop('disabled', true)
-			//notify("Excercise not selected!", "error")
-		}
-		else {
-			msg = JSON.stringify({
-				action : "getProblemList",
-				exerciseId : exid
-			})
-			leonSocket.send(msg)						
-		}
+      var exid = $('#exercise-select').find(":selected").val()
+      if (exid == ""){
+        $('#example-loader').prop('disabled', true)
+        //notify("Excercise not selected!", "error")
+      }
+      else {
+        msg = JSON.stringify({
+          action : "getProblemList",
+          exerciseId : exid
+        })
+        leonSocket.send(msg);
+        if("Derivation for a word" == $('#exercise-select').find(":selected").text()) {
+          addFeedback("A leftmost derivation consists of the start symbol on the first line, and for each successive line applying a rule to the leftmost non-terminal symbol until the final line has the required word.", "Expected output")
+        }
+      }
     }
 
     function loadSelectedExample() {
