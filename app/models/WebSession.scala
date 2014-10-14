@@ -428,14 +428,8 @@ class WebSession(remoteIP: String) extends Actor {
           "Warning: LL(1) check failed.\n" + 
           	ll1feedback.toString + "\n"          
       }
-    } else ""      
-    //if (ll1ok) {
-    ll1feedback + checkEquivalence(gentry.cnfRef, g)
-    //}
-    /*//for stats, remember stats    
-    val pr = new java.io.PrintWriter(quiz.quizName + "-stats.txt")
-    Stats.dumpStats(pr)
-    pr.close()*/
+    } else ""          
+    ll1feedback + checkEquivalence(gentry.cnfRef, g)    
   }
 
   def checkEquivalence(ref: Grammar, g: Grammar): String = {
@@ -538,11 +532,7 @@ class WebSession(remoteIP: String) extends Actor {
         }
       }
     }
-    resstr
-    /*//for stats    
-    val pr = new java.io.PrintWriter(quiz.quizName + "-stats.txt")
-    Stats.dumpStats(pr)
-    pr.close()*/
+    resstr    
   }
 }
 
