@@ -248,6 +248,16 @@ class WebSession(remoteIP: String) extends Actor {
                   disableEvents(List("getHints", "doCheck"))
                 }
             }
+            
+          case "getHelp" =>
+            val exid = (msg \ "exerciseId").as[String].toInt
+            val extype = ExerciseType.getExType(exid)
+            if (extype.isDefined) {
+              val data = Map("message" -> toJson(helpMesage(extype.get)))
+              event("helpmsg", data)
+            } else
+              //log error message
+              clientLog("Exercise with id: " + exid + " does not exist")
 
           case _ =>
             clientError("Error: Unhandled client event " + msg)
@@ -265,6 +275,7 @@ class WebSession(remoteIP: String) extends Actor {
     case msg =>
       clientError("Unknown message: " + msg)
   }
+    
 
   import grammar.examples._
   import grammar.utils._
@@ -309,6 +320,28 @@ class WebSession(remoteIP: String) extends Actor {
       seenNames += newname
       (ge.id.toString -> newname)
     })
+  }
+  
+  def helpMesage(ex: ExerciseType.ExType) = ex match {    
+    case DerivationEx =>      
+    	"<ul><li>A leftmost derivation should have the start symbol on the first line</li>" +
+    		"<li>Each successive line, referred to as a step of the leftmost derivation, should be a sentential form " + 
+    		"which is a sequence of nonterminals or terminals separated by whitespace</li>" +
+    		"<li>Every step should be obtainable from the previous step by replacing the leftmost nonterminal by one of its productions</li>"+
+    		"<li>The last step of the derivation should be the string required to be derived</li></ul>"
+    		
+    case GrammarEx | CNFEx | GNFEx =>      
+      "<ul>Every line of the input should be a valid production in extended Back-Naur form" +
+      "<li> A production is of the form &lt;Nonterminal&gt; ::= (or) -> &lt;Rightside&gt; </li>" +
+      "<li>The left side of the first production is considered as the start symbol</li>" +
+      "<li>Every symbol that does not appear on the left side of a production is considered a terminal</li>" +
+      "<li>A &lt;Nonterminal&gt; is a sequence of alpha-numeric characters and underscore (_), that starts with an alphabet</li>" +
+      "<li>A terminal is any contiguous sequence of characters, other than white-spaces and single quotes('), enclosed within single quotes."+
+      	" Single quotes can be omitted if the six reserved characters: (, ), *, + , ?, |, are not used by the terminal</li>" +
+      	"<li>\"\" denotes the empty string"+
+      	"<li> &lt;Rightside&gt; is a regular expression over terminals and nonterminals that uses | for disjunction, "+
+      	"* for closure, white-space for concatenation, parenthesis ( ) for grouping, + for closure without empty string, "+
+      	" and ? for option (disjunction with empty string)</li></ul>"          
   }
 
   def generateProblemStatement(gentry: GrammarEntry, extype: ExType): String = extype match {
@@ -397,22 +430,30 @@ class WebSession(remoteIP: String) extends Actor {
   }
 
   def checkCNFSolution(gentry: GrammarEntry, studentGrammar: BNFGrammar): String = {
-    val g = ebnfToGrammar(studentGrammar)
-    CFGrammar.getRuleNotInCNF(g) match {
-      case None =>
-        checkEquivalence(gentry.cnfRef, g)
-      case Some(Error(rule, msg)) =>
-        "Rule not in CNF: " + rule + " : " + msg
+    if (BNFConverter.usesRegOp(studentGrammar)) {
+      "The grammar is in EBNF form. You cannot use *,+,? in CNF form"
+    } else {
+      val g = ebnfToGrammar(studentGrammar)
+      CFGrammar.getRuleNotInCNF(g) match {
+        case None =>
+          checkEquivalence(gentry.cnfRef, g)
+        case Some(Error(rule, msg)) =>
+          "Rule not in CNF: " + rule + " : " + msg
+      }
     }
   }
 
   def checkGNFSolution(gentry: GrammarEntry, studentGrammar: BNFGrammar): String = {
-    val g = ebnfToGrammar(studentGrammar)
-    CFGrammar.getRuleNotInGNF(g) match {
-      case None =>
-        checkEquivalence(gentry.cnfRef, g)
-      case Some(Error(rule, msg)) =>
-        "Rule not in Greibach Normal Form: " + rule + " : " + msg
+    if (BNFConverter.usesRegOp(studentGrammar)) {
+      "The grammar is in EBNF form. You cannot use *,+,? in GNF form"
+    } else {
+      val g = ebnfToGrammar(studentGrammar)
+      CFGrammar.getRuleNotInGNF(g) match {
+        case None =>
+          checkEquivalence(gentry.cnfRef, g)
+        case Some(Error(rule, msg)) =>
+          "Rule not in Greibach Normal Form: " + rule + " : " + msg
+      }
     }
   }
 
@@ -483,15 +524,15 @@ class WebSession(remoteIP: String) extends Actor {
       feedbacks.map(f => {
         val feedbackString = f match {
           case AddAllRules(rules) =>
-            "Add: " + replace(rules, renameMap).mkString("\n")
+            "Add: " + rulesToStr(replace(rules, renameMap))
           case RemoveRules(rules) =>
-            "Remove: " + replace(rules, renameMap).mkString("\n")
+            "Remove: " + rulesToStr(replace(rules, renameMap))
           case RefineRules(olds, news) =>
-            "Replace: " + olds.mkString("", "\n", "\n") +
-              "by: " + replace(news, renameMap).mkString("\n")
+            "Replace: " + rulesToStr(olds) +
+              "by: " + rulesToStr(replace(news, renameMap))
           case ExpandRules(olds, news) =>
-            "First, expand the righside of the rule: " + olds.mkString("", "\n", "\n") +
-              "as: " + replace(news, renameMap).mkString("\n")
+            "First, expand the righside of the rule: " + rulesToStr(olds) +
+              "as: " + rulesToStr(replace(news, renameMap))
           case NoRepair =>
             "Cannot provide hints."
         }

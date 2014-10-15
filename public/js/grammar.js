@@ -226,6 +226,11 @@ $(document).ready(function() {
         txt.scrollTop(txt[0].scrollHeight - txt.height())       
         addFeedback(data.message)        
     }
+    
+    handlers["helpmsg"] = function (data) {               
+       addFeedback(data.message, "Input Syntax", true)        
+    }
+        
 
     var receiveEvent = function(event) {
         var data = JSON.parse(event.data)
@@ -300,25 +305,31 @@ $(document).ready(function() {
     var eventTitle = "Output";
     
     /** Adds a feedback to the feedback column, and fade/removes the old ones */
-    var addFeedback = function(text, title) {
+    var addFeedback = function(text, title, htmlstring) {
       if(typeof title == "undefined") title = eventTitle;
       var newTime = new Date().getTime();
-      if(title == lastTitle && newTime - lastTime < 400) {
+      /*if(title == lastTitle && newTime - lastTime < 400) {
         // If it is the same feedback/
         var prevFeedback = $("#feedbackcolumn .action .feedback").first()
         prevFeedback.text(prevFeedback.text() + "\n" + text);
         return;
-      }
+      }*/
       lastTime = newTime;
       lastTitle = title;
     
       var feedback = $("<div>").addClass("action");
-      var close = $("<div>").text("X").addClass("closeButton").css("position","absolute").css("right","0px").css("z-index","1000").click((function(f) {return (function() {f.remove();});})(feedback));
+      var close = $("<div>").text("X").addClass("closeButton").css("position","absolute").css("right","0px").css("z-index","1000").click(
+    		  (function(f) {return (function() {f.remove();});})(feedback));
       feedback.append(close)
       if(typeof title !== "undefined") {
         feedback.append($("<h3>").text(title));
       }
-      feedback.append($("<div>").addClass("feedback").text(text));
+      var divelem = $("<div>").addClass("feedback")      
+      if(htmlstring == true)
+    	  feedback.append(divelem.html(text));
+      else
+    	  feedback.append(divelem.text(text));
+    	  
       feedback.click(function() { $(this).css("opacity", 1);});
       feedback.insertAfter($("#feedbackcolumn #notifications"))
       feedback.hide();
@@ -342,8 +353,6 @@ $(document).ready(function() {
         }, 300);*/
       }, 50);
     }
-    //addFeedback("Perhaps you should consider drinking soda", "Hint")
-    //addFeedback("Perhaps you should consider drinking coke", "Error")
 
     var openEvent = function(event) {
       setConnected()
@@ -521,10 +530,8 @@ $(document).ready(function() {
           action : "getProblemList",
           exerciseId : exid
         })
-        leonSocket.send(msg);
-        if("Derivation for a word" == $('#exercise-select').find(":selected").text()) {
-          addFeedback("A leftmost derivation consists of the start symbol on the first line, and for each successive line applying a rule to the leftmost non-terminal symbol until the final line has the required word.", "Expected output")
-        }
+        leonSocket.send(msg);        
+        //doHelp() should we enable this ?
       }
     }
 
@@ -613,6 +620,12 @@ $(document).ready(function() {
         editor.gotoLine(0);
     }
     
+    $("#button-norm").hover(function() {
+		$(this).attr("title","Removes Epsilon, Unit productions and makes the start symbol appear only on the left side");
+			}, function() {
+		$(this).attr("title","");
+	});
+    
     $("#button-norm").click(function(event) {
     	if (!$(this).hasClass("disabled")) {
 	      var currentCode = editor.getValue()     
@@ -625,6 +638,7 @@ $(document).ready(function() {
     	}
     	event.preventDefault() 
     });
+       
       
     function doCheck() {
       eventTitle = "Solution check";    	       
@@ -686,5 +700,20 @@ $(document).ready(function() {
   	      var msg = JSON.stringify({action: "abortOps", exerciseId: extype })  	        
   	      leonSocket.send(msg)
         }
+    });
+    
+    function doHelp() {
+		var extype = $('#exercise-select').find(":selected").val()
+	    if(extype == "")
+	  	  notify("Select the exercise for which you want help!", "error")
+	    else {          
+	      var msg = JSON.stringify({action: "getHelp", exerciseId: extype })  	        
+	      leonSocket.send(msg)
+	    }
+    }
+    
+    $('#button-help').click(function(event) {
+    	eventTitle = "help";        
+        doHelp()
     });
 });
