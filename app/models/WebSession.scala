@@ -331,7 +331,7 @@ class WebSession(remoteIP: String) extends Actor {
     		"<li>The last step of the derivation should be the string required to be derived</li></ul>"
     		
     case GrammarEx | CNFEx | GNFEx =>      
-      "<ul>Every line of the input should be a valid production in extended Back-Naur form" +
+      "<ul>Every line of the input should be a valid production in extended Backus-Naur form" +
       "<li> A production is of the form &lt;Nonterminal&gt; ::= (or) -> &lt;Rightside&gt; </li>" +
       "<li>The left side of the first production is considered as the start symbol</li>" +
       "<li>Every symbol that does not appear on the left side of a production is considered a terminal</li>" +
