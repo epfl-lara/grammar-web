@@ -597,6 +597,7 @@ $(document).ready(function() {
 
         $('#codecolumn').height(h);
         $('#actionscolumn').height(h);
+        $('#feedbackcolumn').height(h);
         $('#leoninput').height(h).width(w);
         $('#codebox').height(h).width("100%");
 
