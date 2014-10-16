@@ -523,7 +523,7 @@ class WebSession(remoteIP: String) extends Actor {
       val renameMap = genRenameMap(newnonterms, nonterminals(resG))
       feedbacks.map(f => {
         val feedbackString = f match {
-          case AddAllRules(rules) =>
+          case AddAllRules(rules) =>            
             "Add: " + rulesToStr(replace(rules, renameMap))
           case RemoveRules(rules) =>
             "Remove: " + rulesToStr(replace(rules, renameMap))
