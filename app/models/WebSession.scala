@@ -57,38 +57,49 @@ class WebSession(remoteIP: String) extends Actor {
     pushMessage(toJson(Map("kind" -> "console", "level" -> "error", "message" -> msg)))
   }
 
-  def event(kind: String, data: Map[String, JsValue]) = {    
+  def event(kind: String, data: Map[String, JsValue]) = {
     pushMessage(toJson(Map("kind" -> toJson(kind)) ++ data))
   }
 
+  //operation list
+  sealed abstract class OpRes
+  case class Last(str: String) extends OpRes
+  case class Partial(str: String, nextPart: Future[OpRes]) extends OpRes
+
   //a list operation futures
-  var currentOp: Option[Future[String]] = None
-  def recordFuture(opfuture: Future[String], extype: Option[ExerciseType.ExType]) {
+  var currentOp: Option[Future[OpRes]] = None
+  def recordFuture(opfuture: Future[OpRes], extype: Option[ExerciseType.ExType]) {
     currentOp = Some(opfuture)
     //register a call-back
     opfuture onComplete {
-      case Success(resstr) =>
-        //check if the future has been super-seeded other operations,
-        //in which case ignore the result
-        if (currentOp == Some(opfuture)) {
-          clientLog(resstr)
-          extype match {
-            case Some(ExerciseType.GrammarEx) =>
-              enableEvents(List("doCheck", "getHints"))
-            case Some(_) =>
-              enableEvents(List("doCheck"))
-            case _ =>
-              //allow every thing here
-              enableEvents(List("doCheck", "getHints"))
-          }
+      case Success(opRes) if (currentOp == Some(opfuture)) =>
+        opRes match {
+          case Last(resstr) =>
+            //send the message to the client and complete the operation
+            clientLog(resstr)
+            extype match {
+              case Some(ExerciseType.GrammarEx) =>
+                enableEvents(List("doCheck", "getHints"))
+              case Some(_) =>
+                enableEvents(List("doCheck"))
+              case _ =>
+                //allow every thing here
+                enableEvents(List("doCheck", "getHints"))
+            }
+          case Partial(partRes, nextPart) =>
+            //send partial result to the client and continue the next operation
+            clientLog(partRes)
+            recordFuture(nextPart, extype)
         }
       //else do nothing            
-      case Failure(msg) =>
-        if (currentOp == Some(opfuture)) {
-          clientLog("Operation aborted abnormally")
-          //print the exception to the console
-          println(msg)
-        }
+      case Failure(msg) if (currentOp == Some(opfuture)) =>
+        clientLog("Operation aborted abnormally")
+        //print the exception to the console
+        println(msg)
+
+      case _ =>
+      //Here, the currentop has been superseeded by another operation 
+      //or has been aborted. so ignore the result        
     }
   }
 
@@ -131,8 +142,8 @@ class WebSession(remoteIP: String) extends Actor {
                 enableEvents(List("getHints", "doCheck"))
             }
 
-          case "doUpdateCode" =>             
-            ;            
+          case "doUpdateCode" =>
+            ;
           /*val rules = grammar.split("\n").toList
             //try to parse the grammar (syntax errors will be displayed to the console)            
             //it is reserved for newly created symbols
@@ -204,7 +215,7 @@ class WebSession(remoteIP: String) extends Actor {
                   //log error message
                   clientLog("Exercise with id: " + exid + " does not exist")
             }
-            
+
           case "checkLL1" =>
             val grammar = (msg \ "code").as[String]
             val rules = grammar.split("\n").toList
@@ -215,12 +226,12 @@ class WebSession(remoteIP: String) extends Actor {
             else {
               //check for ll1 property
               val ll1feedback = checkLL1(bnfGrammar.get)
-              if(ll1feedback.isEmpty)
+              if (ll1feedback.isEmpty)
                 clientLog("The grammar is in LL(1)")
-              else 
-            	clientLog(ll1feedback.get)
+              else
+                clientLog(ll1feedback.get)
             }
-          
+
           case "checkAmbiguity" =>
             val grammar = (msg \ "code").as[String]
             val rules = grammar.split("\n").toList
@@ -229,7 +240,7 @@ class WebSession(remoteIP: String) extends Actor {
             if (!bnfGrammar.isDefined)
               clientLog("Parse Error:" + errstr)
             else {
-              clientLog(checkAmbiguity(bnfGrammar.get))              
+              clientLog(checkAmbiguity(bnfGrammar.get))
             }
 
           case "normalize" =>
@@ -274,7 +285,7 @@ class WebSession(remoteIP: String) extends Actor {
                   disableEvents(List("getHints", "doCheck"))
                 }
             }
-            
+
           case "getHelp" =>
             val exid = (msg \ "exerciseId").as[String].toInt
             val extype = ExerciseType.getExType(exid)
@@ -301,7 +312,6 @@ class WebSession(remoteIP: String) extends Actor {
     case msg =>
       clientError("Unknown message: " + msg)
   }
-    
 
   import grammar.examples._
   import grammar.utils._
@@ -347,27 +357,27 @@ class WebSession(remoteIP: String) extends Actor {
       (ge.id.toString -> newname)
     })
   }
-  
-  def helpMesage(ex: ExerciseType.ExType) = ex match {    
-    case DerivationEx =>      
-    	"<ul><li>A leftmost derivation should have the start symbol on the first line</li>" +
-    		"<li>Each successive line, referred to as a step of the leftmost derivation, should be a sentential form " + 
-    		"which is a sequence of nonterminals or terminals separated by whitespace</li>" +
-    		"<li>Every step should be obtainable from the previous step by replacing the leftmost nonterminal by one of its productions</li>"+
-    		"<li>The last step of the derivation should be the string required to be derived</li></ul>"
-    		
-    case GrammarEx | CNFEx | GNFEx =>      
+
+  def helpMesage(ex: ExerciseType.ExType) = ex match {
+    case DerivationEx =>
+      "<ul><li>A leftmost derivation should have the start symbol on the first line</li>" +
+        "<li>Each successive line, referred to as a step of the leftmost derivation, should be a sentential form " +
+        "which is a sequence of nonterminals or terminals separated by whitespace</li>" +
+        "<li>Every step should be obtainable from the previous step by replacing the leftmost nonterminal by one of its productions</li>" +
+        "<li>The last step of the derivation should be the string required to be derived</li></ul>"
+
+    case GrammarEx | CNFEx | GNFEx =>
       "<ul>Every line of the input should be a valid production in extended Backus-Naur form" +
-      "<li> A production is of the form &lt;Nonterminal&gt; ::= (or) -> &lt;Rightside&gt; </li>" +
-      "<li>The left side of the first production is considered as the start symbol</li>" +
-      "<li>Every symbol that does not appear on the left side of a production is considered a terminal</li>" +
-      "<li>A &lt;Nonterminal&gt; is a sequence of alpha-numeric characters and underscore (_), that starts with an alphabet</li>" +
-      "<li>A terminal is any contiguous sequence of characters, other than white-spaces and single quotes('), enclosed within single quotes."+
-      	" Single quotes can be omitted if the six reserved characters: (, ), *, + , ?, |, are not used by the terminal</li>" +
-      	"<li>\"\" denotes the empty string"+
-      	"<li> &lt;Rightside&gt; is a regular expression over terminals and nonterminals that uses | for disjunction, "+
-      	"* for closure, white-space for concatenation, parenthesis ( ) for grouping, + for closure without empty string, "+
-      	" and ? for option (disjunction with empty string)</li></ul>"          
+        "<li> A production is of the form &lt;Nonterminal&gt; ::= (or) -> &lt;Rightside&gt; </li>" +
+        "<li>The left side of the first production is considered as the start symbol</li>" +
+        "<li>Every symbol that does not appear on the left side of a production is considered a terminal</li>" +
+        "<li>A &lt;Nonterminal&gt; is a sequence of alpha-numeric characters and underscore (_), that starts with an alphabet</li>" +
+        "<li>A terminal is any contiguous sequence of characters, other than white-spaces and single quotes('), enclosed within single quotes." +
+        " Single quotes can be omitted if the six reserved characters: (, ), *, + , ?, |, are not used by the terminal</li>" +
+        "<li>\"\" denotes the empty string" +
+        "<li> &lt;Rightside&gt; is a regular expression over terminals and nonterminals that uses | for disjunction, " +
+        "* for closure, white-space for concatenation, parenthesis ( ) for grouping, + for closure without empty string, " +
+        " and ? for option (disjunction with empty string)</li></ul>"
   }
 
   def generateProblemStatement(gentry: GrammarEntry, extype: ExType): String = extype match {
@@ -394,8 +404,11 @@ class WebSession(remoteIP: String) extends Actor {
       }
   }
 
-  def checkSolution(gentry: GrammarEntry, extype: ExType, userAnswer: String): String = {
-
+  /**
+   * Returns a string (which could be a temporary result) and also continuation
+   * if more operation has to be performed
+   */
+  def checkSolution(gentry: GrammarEntry, extype: ExType, userAnswer: String): OpRes = {
     extype match {
       case GrammarEx =>
         //here, we expect the user answer to be a grammar in EBNF form
@@ -403,7 +416,7 @@ class WebSession(remoteIP: String) extends Actor {
         //try to parse the grammar (syntax errors will be displayed in the console)
         val (bnfGrammar, errstr) = (new GrammarParser()).parseGrammar(rules)
         if (!bnfGrammar.isDefined)
-          "Parse Error:" + errstr
+          Last("Parse Error:" + errstr)
         else
           checkGrammarSolution(gentry, bnfGrammar.get)
       case DerivationEx =>
@@ -414,16 +427,16 @@ class WebSession(remoteIP: String) extends Actor {
         if (derivationSteps.isDefined) {
           //get the last word presented
           if (wordForDerivation.isDefined) {
-            checkDerivation(gentry, derivationSteps.get, wordForDerivation.get)
+            Last(checkDerivation(gentry, derivationSteps.get, wordForDerivation.get))
           } else
-            "Cannot find the word to derive. Select the problem and try again!"
+            Last("Cannot find the word to derive. Select the problem and try again!")
         } else
-          "Parse Error: " + errmsg
+          Last("Parse Error: " + errmsg)
       case CNFEx =>
         //here, we expect the user answer to be a grammar in EBNF form                        
         val (bnfGrammar, errstr) = (new GrammarParser()).parseGrammar(userAnswer.split("\n").toList)
         if (!bnfGrammar.isDefined)
-          "Parse Error:" + errstr
+          Last("Parse Error:" + errstr)
         else
           checkCNFSolution(gentry, bnfGrammar.get)
 
@@ -431,7 +444,7 @@ class WebSession(remoteIP: String) extends Actor {
         //here, we expect the user answer to be a grammar in EBNF form                        
         val (bnfGrammar, errstr) = (new GrammarParser()).parseGrammar(userAnswer.split("\n").toList)
         if (!bnfGrammar.isDefined)
-          "Parse Error:" + errstr
+          Last("Parse Error:" + errstr)
         else
           checkGNFSolution(gentry, bnfGrammar.get)
     }
@@ -455,47 +468,49 @@ class WebSession(remoteIP: String) extends Actor {
       }
   }
 
-  def checkCNFSolution(gentry: GrammarEntry, studentGrammar: BNFGrammar): String = {
+  def checkCNFSolution(gentry: GrammarEntry, studentGrammar: BNFGrammar): OpRes = {
     if (BNFConverter.usesRegOp(studentGrammar)) {
-      "The grammar is in EBNF form. You cannot use *,+,? in CNF form"
+      Last("The grammar is in EBNF form. You cannot use *,+,? in CNF form")
     } else {
       val g = ebnfToGrammar(studentGrammar)
       CFGrammar.getRuleNotInCNF(g) match {
         case None =>
-          checkEquivalence(gentry.cnfRef, g)
+          Partial("The grammar staisfies CNF properties.\nchecking for equivalence...",
+            Future { checkEquivalence(gentry.cnfRef, g) })
         case Some(Error(rule, msg)) =>
-          "Rule not in CNF: " + rule + " : " + msg
+          Last("Rule not in CNF: " + rule + " : " + msg)
       }
     }
   }
 
-  def checkGNFSolution(gentry: GrammarEntry, studentGrammar: BNFGrammar): String = {
+  def checkGNFSolution(gentry: GrammarEntry, studentGrammar: BNFGrammar): OpRes = {
     if (BNFConverter.usesRegOp(studentGrammar)) {
-      "The grammar is in EBNF form. You cannot use *,+,? in GNF form"
+      Last("The grammar is in EBNF form. You cannot use *,+,? in GNF form")
     } else {
       val g = ebnfToGrammar(studentGrammar)
       CFGrammar.getRuleNotInGNF(g) match {
         case None =>
-          checkEquivalence(gentry.cnfRef, g)
+          Partial("The grammar staisfies GNF properties.\nchecking for equivalence...",
+            Future { checkEquivalence(gentry.cnfRef, g) })
         case Some(Error(rule, msg)) =>
-          "Rule not in Greibach Normal Form: " + rule + " : " + msg
+          Last("Rule not in Greibach Normal Form: " + rule + " : " + msg)
       }
     }
   }
-  
-  def checkLL1(studentGrammar : BNFGrammar) : Option[String] = {
-    if (BNFConverter.usesRegOp(studentGrammar)) {        
-          Some("Regular expression operations *,+,? are not supported by the LL1 check." +
-          "Remove them and retry")
-      } else {                
-        GrammarUtils.isLL1WithFeedback(studentGrammar.cfGrammar) match {
-          case GrammarUtils.InLL1() => None
-          case ll1feedback =>
-            Some(ll1feedback.toString)            
-        }
+
+  def checkLL1(studentGrammar: BNFGrammar): Option[String] = {
+    if (BNFConverter.usesRegOp(studentGrammar)) {
+      Some("Regular expression operations *,+,? are not supported by the LL1 check." +
+        "Remove them and retry")
+    } else {
+      GrammarUtils.isLL1WithFeedback(studentGrammar.cfGrammar) match {
+        case GrammarUtils.InLL1() => None
+        case ll1feedback =>
+          Some(ll1feedback.toString)
       }
+    }
   }
-  
+
   import clients.AmbiguityChecker._
   def checkAmbiguity(studentGrammar: BNFGrammar): String = {
     checkForAmbiguity(studentGrammar.cfGrammar) match {
@@ -508,21 +523,26 @@ class WebSession(remoteIP: String) extends Actor {
     }
   }
 
-  def checkGrammarSolution(gentry: GrammarEntry, studentGrammar: BNFGrammar): String = {
-    
+  def checkGrammarSolution(gentry: GrammarEntry, studentGrammar: BNFGrammar): OpRes = {
+
     //check if the exercise requires the grammar to be in LL1
     val ll1feedback = if (gentry.isLL1Entry) {
       //check for LL1
-      val ll1res  = checkLL1(studentGrammar)
-      if(ll1res.isDefined){
-    	 "Warning: LL(1) check failed: " + ll1res.get + "\n\n"
+      val ll1res = checkLL1(studentGrammar)
+      if (ll1res.isDefined) {
+        "Warning: LL(1) check failed: " + ll1res.get + "\n\n"
       } else
         ""
-    } else ""          
-    ll1feedback + checkEquivalence(gentry.cnfRef, studentGrammar.cfGrammar)    
+    } else ""
+    checkEquivalence(gentry.cnfRef, studentGrammar.cfGrammar) match {
+      case Last(resstr) =>
+        Last(ll1feedback + resstr)
+      case Partial(resstr, nextPart) => Partial(ll1feedback + resstr, nextPart)
+    }
+
   }
 
-  def checkEquivalence(ref: Grammar, g: Grammar): String = {
+  def checkEquivalence(ref: Grammar, g: Grammar): OpRes = {
     val nOfTests = 100
     val debug = false
 
@@ -536,7 +556,7 @@ class WebSession(remoteIP: String) extends Actor {
 
     val cnfG = CNFConverter.toCNF(g)
     if (cnfG.rules.isEmpty) {
-      "The grammar accepts/produces no strings! Check if all rules are reachable and productive !"
+      Last("The grammar accepts/produces no strings! Check if all rules are reachable and productive !")
     } else {
       if (debug) {
         clientLog("Grammar in CNF: " + cnfG)
@@ -544,24 +564,28 @@ class WebSession(remoteIP: String) extends Actor {
       val equivChecker = new EquivalenceChecker(ref, nOfTests)
       equivChecker.isEquivalentTo(cnfG) match {
         case PossiblyEquivalent => {
-          if (proveEquivalence(equivChecker.cnfRef, cnfG)) {
-            "Correct."
-          } else
-            "Possibly correct but unable to prove correctness."
+          //print a temporary status message here here, iff this has not been aborted          
+          Partial("All testcases passed.\nProving equivalence ... ",
+            Future {
+              Last(if (proveEquivalence(equivChecker.cnfRef, cnfG))
+                "Correct."
+              else
+                "Possibly correct but unable to prove correctness.")
+            })
         }
         case InadequateTestcases =>
-          "Cannot generate enough testcases to prove correctness.\n" +
-            "Make the grammar less ambiguous and try again!"
+          Last("Cannot generate enough testcases to prove correctness.\n" +
+            "Make the grammar less ambiguous and try again!")
         case NotEquivalentNotAcceptedBySolution(ex) =>
-          "The grammar does not accept the string: " + wordToString(ex)
+          Last("The grammar does not accept the string: " + wordToString(ex))
 
         case NotEquivalentNotGeneratedBySolution(ex) =>
-          "The grammar accepts the invalid string: " + wordToString(ex)
+          Last("The grammar accepts the invalid string: " + wordToString(ex))
       }
     }
   }
 
-  def provideHints(ex: GrammarEntry, studentGrammar: BNFGrammar): String = {
+  def provideHints(ex: GrammarEntry, studentGrammar: BNFGrammar): OpRes = {
 
     val debug = false
     val nOfTests = 100
@@ -572,7 +596,7 @@ class WebSession(remoteIP: String) extends Actor {
       val renameMap = genRenameMap(newnonterms, nonterminals(resG))
       feedbacks.map(f => {
         val feedbackString = f match {
-          case AddAllRules(rules) =>            
+          case AddAllRules(rules) =>
             "Add: " + rulesToStr(replace(rules, renameMap))
           case RemoveRules(rules) =>
             "Remove: " + rulesToStr(replace(rules, renameMap))
@@ -622,7 +646,7 @@ class WebSession(remoteIP: String) extends Actor {
         }
       }
     }
-    resstr    
+    Last(resstr)
   }
 }
 

@@ -316,12 +316,12 @@ $(document).ready(function() {
     var addFeedback = function(text, title, htmlstring) {
       if(typeof title == "undefined") title = eventTitle;
       var newTime = new Date().getTime();
-      /*if(title == lastTitle && newTime - lastTime < 400) {
-        // If it is the same feedback/
+      if(title == lastTitle && newTime - lastTime < 400) {
+        //wait for all parts of the same feedback to arrive same feedback/
         var prevFeedback = $("#feedbackcolumn .action .feedback").first()
         prevFeedback.text(prevFeedback.text() + "\n" + text);
         return;
-      }*/
+      }
       lastTime = newTime;
       lastTitle = title;
     
