@@ -610,21 +610,32 @@ class WebSession(remoteIP: String) extends Actor {
               msg + "\nNonterminals with '?' can belong to the grammar or could be a fresh nonterminal"
             } else
               msg
-          case RemoveRules(rules) =>
+
+          case RemoveRules(rules, None) =>
             "To block the string: " + wordToString(w) +
-              "\nTry Removing: " + rulesToStr(replace(rules, renameMap))
-          case RefineRules(olds, news) =>
-            "To block the string: " + wordToString(w) +
-              "Replace: " + rulesToStr(olds) +
+              "\nRemove: " + rulesToStr(rules)
+
+          case RemoveRules(rules, Some(repairRules)) =>
+            "To block the string: \"" + wordToString(w) + "\"" +
+              "\nRemove the rule: " + rules +
+              " that results in the derivation of the invalid string"
+
+          case RefineRules(olds, news, repairRules) =>
+            "To block the string: \"" + wordToString(w) + "\"" +
+              " the derivation: " + rulesToStr(repairRules) +
+              " should be blocked in context: " + rulesToStr(olds) +
+              "\nTry replacing: " + rulesToStr(olds) +
               "\nby: " + rulesToStr(replace(news, renameMap))
+
           case ExpandRules(olds, news) =>
-            "Grammar generates invalid string: \"" + wordToString(w) + "\""+ 
-            "\nTry hints after expanding the righside of the rule: " + rulesToStr(olds) +
-            "\nby inlining the productions of the nonterminals in the rightside: " + 
+            "Grammar generates invalid string: \"" + wordToString(w) + "\"" +
+              "\nTry hints after expanding the righside of the rule: " + rulesToStr(olds) +
+              "\nby inlining the productions of the nonterminals in the rightside: " +
               "\nEg. as " + (if (news.size <= maxHintsSize)
                 rulesToStr(replace(news, renameMap))
               else
                 rulesToStr(replace(news.take(5), renameMap)) + " ...")
+
           case NoRepair =>
             "Cannot provide hints."
         }
