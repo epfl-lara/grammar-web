@@ -589,23 +589,42 @@ class WebSession(remoteIP: String) extends Actor {
 
     val debug = false
     val nOfTests = 100
+    val maxHintsSize = 5
 
-    def prettyPrintFeedbacks(inG: Grammar, resG: Grammar, feedbacks: List[GrammarFeedback]) = {
+    def prettyPrintFeedbacks(inG: Grammar, resG: Grammar, w: Word, feedbacks: List[GrammarFeedback]) = {
       //pretty print feedbacks by renaming new non-terminals to simpler names
-      val newnonterms = nonterminals(resG) -- nonterminals(inG)
+      val newnonterms = resG.nonTerminals.filterNot(CNFConverter.isCNFNonterminal _).toSet --
+        nonterminals(inG)
       val renameMap = genRenameMap(newnonterms, nonterminals(resG))
       feedbacks.map(f => {
         val feedbackString = f match {
           case AddAllRules(rules) =>
-            "Add: " + rulesToStr(replace(rules, renameMap))
+            var msg = "To accept the string: " + wordToString(w) + "\n"
+            val newMap = renameMap.map {
+              //add question mark to the names of the nonterminals
+              case (k, Nonterminal(n)) => (k, Nonterminal(n + "?"))
+            }
+            msg += "Try Adding: " + rulesToStr(replace(rules, newMap))
+            if (!newnonterms.isEmpty) {
+              //println("newnontemrs: " + newnonterms)
+              msg + "\nNonterminals with '?' can belong to the grammar or could be a fresh nonterminal"
+            } else
+              msg
           case RemoveRules(rules) =>
-            "Remove: " + rulesToStr(replace(rules, renameMap))
+            "To block the string: " + wordToString(w) +
+              "\nTry Removing: " + rulesToStr(replace(rules, renameMap))
           case RefineRules(olds, news) =>
-            "Replace: " + rulesToStr(olds) +
-              "by: " + rulesToStr(replace(news, renameMap))
+            "To block the string: " + wordToString(w) +
+              "Replace: " + rulesToStr(olds) +
+              "\nby: " + rulesToStr(replace(news, renameMap))
           case ExpandRules(olds, news) =>
-            "First, expand the righside of the rule: " + rulesToStr(olds) +
-              "as: " + rulesToStr(replace(news, renameMap))
+            "Grammar generates invalid string: \"" + wordToString(w) + "\""+ 
+            "\nTry hints after expanding the righside of the rule: " + rulesToStr(olds) +
+            "\nby inlining the productions of the nonterminals in the rightside: " + 
+              "\nEg. as " + (if (news.size <= maxHintsSize)
+                rulesToStr(replace(news, renameMap))
+              else
+                rulesToStr(replace(news.take(5), renameMap)) + " ...")
           case NoRepair =>
             "Cannot provide hints."
         }
@@ -635,13 +654,11 @@ class WebSession(remoteIP: String) extends Actor {
                 "Make the grammar less ambiguous and try again!"
             case equivResult @ NotEquivalentNotAcceptedBySolution(ex) =>
               val (resG, feedbacks) = repairer.hint(cnfG, equivResult)
-              "To accept the string: " + wordToString(ex) + "\n" +
-                prettyPrintFeedbacks(plainGrammar, resG, feedbacks)
+              prettyPrintFeedbacks(plainGrammar, resG, ex, feedbacks)
 
             case equivResult @ NotEquivalentNotGeneratedBySolution(ex) =>
               val (resG, feedbacks) = repairer.hint(cnfG, equivResult)
-              "To block the string: " + wordToString(ex) + "\n" +
-                prettyPrintFeedbacks(plainGrammar, resG, feedbacks)
+              prettyPrintFeedbacks(plainGrammar, resG, ex, feedbacks)
           }
         }
       }

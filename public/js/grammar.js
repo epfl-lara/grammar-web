@@ -319,7 +319,7 @@ $(document).ready(function() {
       if(title == lastTitle && newTime - lastTime < 400) {
         //wait for all parts of the same feedback to arrive same feedback/
         var prevFeedback = $("#feedbackcolumn .action .feedback").first()
-        prevFeedback.text(prevFeedback.text() + "\n" + text);
+        prevFeedback.text(prevFeedback.text() + "\n\n" + text);
         return;
       }
       lastTime = newTime;
