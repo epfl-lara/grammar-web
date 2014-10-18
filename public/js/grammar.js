@@ -259,6 +259,10 @@ $(document).ready(function() {
   				$('#button-hints').addClass("disabled")
   			else if(field == "doCheck")  				
   				$('#button-check').addClass("disabled")
+  			else if(field == "checkLL1")
+  				$('#button-ll1').addClass("disabled")
+  			else if(field == "checkAmbiguity")
+  				$('#button-ll1').addClass("disabled")
   			//add more events here if necessary  		      		  
   	  });
     }
@@ -271,6 +275,10 @@ $(document).ready(function() {
   				$('#button-hints').removeClass('disabled')
   			else if(field == "doCheck")  				
   				$('#button-check').removeClass("disabled")
+  			else if(field == "checkLL1")
+  				$('#button-ll1').removeClass("disabled")
+  			else if(field == "checkAmbiguity")
+  				$('#button-amb').removeClass("disabled")
   			//add more events here if necessary  		      		  
   	  });
     }
@@ -716,5 +724,31 @@ $(document).ready(function() {
     $('#button-help').click(function(event) {
     	eventTitle = "help";        
         doHelp()
+    });
+    
+    $("#button-ll1").click(function(event) {
+    	if (!$(this).hasClass("disabled")) {
+	      var currentCode = editor.getValue()     
+	      //first save the state
+	      save(currentCode)
+	      var msg = JSON.stringify(
+	        {action: "checkLL1", code : currentCode }
+	      )
+	      leonSocket.send(msg)
+    	}
+    	event.preventDefault() 
+    });
+    
+    $("#button-amb").click(function(event) {
+    	if (!$(this).hasClass("disabled")) {
+	      var currentCode = editor.getValue()     
+	      //first save the state
+	      save(currentCode)
+	      var msg = JSON.stringify(
+	        {action: "checkAmbiguity", code : currentCode }
+	      )
+	      leonSocket.send(msg)
+    	}
+    	event.preventDefault() 
     });
 });

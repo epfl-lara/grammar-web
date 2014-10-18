@@ -204,6 +204,33 @@ class WebSession(remoteIP: String) extends Actor {
                   //log error message
                   clientLog("Exercise with id: " + exid + " does not exist")
             }
+            
+          case "checkLL1" =>
+            val grammar = (msg \ "code").as[String]
+            val rules = grammar.split("\n").toList
+            //try to parse the grammar (syntax errors will be displayed in the client console)
+            val (bnfGrammar, errstr) = (new GrammarParser()).parseGrammar(rules)
+            if (!bnfGrammar.isDefined)
+              clientLog("Parse Error:" + errstr)
+            else {
+              //check for ll1 property
+              val ll1feedback = checkLL1(bnfGrammar.get)
+              if(ll1feedback.isEmpty)
+                clientLog("The grammar is in LL(1)")
+              else 
+            	clientLog(ll1feedback.get)
+            }
+          
+          case "checkAmbiguity" =>
+            val grammar = (msg \ "code").as[String]
+            val rules = grammar.split("\n").toList
+            //try to parse the grammar (syntax errors will be displayed in the client console)
+            val (bnfGrammar, errstr) = (new GrammarParser()).parseGrammar(rules)
+            if (!bnfGrammar.isDefined)
+              clientLog("Parse Error:" + errstr)
+            else {
+              clientLog(checkAmbiguity(bnfGrammar.get))              
+            }
 
           case "normalize" =>
             val grammar = (msg \ "code").as[String]
@@ -218,7 +245,6 @@ class WebSession(remoteIP: String) extends Actor {
                 (BNFConverter.ebnfToGrammar _
                   andThen CNFConverter.toCNF
                   andThen CNFConverter.cnfToGrammar
-                  andThen CFGrammar.simplifyGrammar
                   andThen CFGrammar.renameAutoSymbols)
               val normalGrammar = normalization(bnfGrammar.get)
               val data = Map("grammar" -> toJson(normalGrammar.toString))
@@ -456,21 +482,44 @@ class WebSession(remoteIP: String) extends Actor {
       }
     }
   }
+  
+  def checkLL1(studentGrammar : BNFGrammar) : Option[String] = {
+    if (BNFConverter.usesRegOp(studentGrammar)) {        
+          Some("Regular expression operations *,+,? are not supported by the LL1 check." +
+          "Remove them and retry")
+      } else {                
+        GrammarUtils.isLL1WithFeedback(studentGrammar.cfGrammar) match {
+          case GrammarUtils.InLL1() => None
+          case ll1feedback =>
+            Some(ll1feedback.toString)            
+        }
+      }
+  }
+  
+  import clients.AmbiguityChecker._
+  def checkAmbiguity(studentGrammar: BNFGrammar): String = {
+    checkForAmbiguity(studentGrammar.cfGrammar) match {
+      case Unambiguous() =>
+        "The grammar is unambiguous."
+      case PossiblyUnambiguous() =>
+        "The grammar is possibly unambiguous."
+      case AmbiguousString(w) =>
+        "The are at least two parse trees for: " + wordToString(w)
+    }
+  }
 
   def checkGrammarSolution(gentry: GrammarEntry, studentGrammar: BNFGrammar): String = {
-
-    val g = ebnfToGrammar(studentGrammar)
+    
     //check if the exercise requires the grammar to be in LL1
     val ll1feedback = if (gentry.isLL1Entry) {
       //check for LL1
-      GrammarUtils.isLL1WithFeedback(g) match {
-        case GrammarUtils.InLL1() => ""          
-        case ll1feedback =>
-          "Warning: LL(1) check failed.\n" + 
-          	ll1feedback.toString + "\n"          
-      }
+      val ll1res  = checkLL1(studentGrammar)
+      if(ll1res.isDefined){
+    	 "Warning: LL(1) check failed: " + ll1res.get + "\n\n"
+      } else
+        ""
     } else ""          
-    ll1feedback + checkEquivalence(gentry.cnfRef, g)    
+    ll1feedback + checkEquivalence(gentry.cnfRef, studentGrammar.cfGrammar)    
   }
 
   def checkEquivalence(ref: Grammar, g: Grammar): String = {
