@@ -29,6 +29,14 @@ import java.io.File
 object database1 extends GrammarDatabase(Play.getFile("/public/resources/GrammarDatabase.xml")) {
 }
 
+object Guid {
+  private var id : Long = 0
+  def getNextId = {
+    id = id + 1
+    id
+  }  
+}
+
 class WebSession(remoteIP: String) extends Actor {
   import Protocol._
   //creating a thread pool for futures
@@ -45,14 +53,16 @@ class WebSession(remoteIP: String) extends Actor {
 
   def pushMessage(v: JsValue) = channel.push(v)
 
-  def clientLog(msg: String) = {
-    eventLogger.println("[>] L: " + msg)
+  def clientLog(msg: String)(implicit msgid : Long) = {
+    val timestamp = new java.text.SimpleDateFormat("dd-HH-mm-ss").format(new java.util.Date())
+    eventLogger.println("[>]["+msgid+"]["+timestamp+"] "+ msg)
     eventLogger.flush()
     pushMessage(toJson(Map("kind" -> "console", "level" -> "log", "message" -> msg)))
   }
 
-  def clientError(msg: String) = {
-    eventLogger.println("[>] E: " + msg)
+  def clientError(msg: String)(implicit msgid: Long) = {
+    val timestamp = new java.text.SimpleDateFormat("dd-HH-mm-ss").format(new java.util.Date())
+    eventLogger.println("[>]["+msgid+"]["+timestamp+"] "+ msg)
     eventLogger.flush()
     pushMessage(toJson(Map("kind" -> "console", "level" -> "error", "message" -> msg)))
   }
@@ -68,7 +78,8 @@ class WebSession(remoteIP: String) extends Actor {
 
   //a list operation futures
   var currentOp: Option[Future[OpRes]] = None
-  def recordFuture(opfuture: Future[OpRes], extype: Option[ExerciseType.ExType]) {
+  def recordFuture(opfuture: Future[OpRes], extype: Option[ExerciseType.ExType]) 
+  	(implicit msgid: Long){    
     currentOp = Some(opfuture)
     //register a call-back
     opfuture onComplete {
@@ -116,11 +127,13 @@ class WebSession(remoteIP: String) extends Actor {
   def receive = {
     case Init =>
       sender ! InitSuccess(enumerator)
-    //clientLog("New client")
 
     case FromClient(msg) =>
+       //create a unique id for message
+      implicit val msgid = Guid.getNextId      
       try {
-        eventLogger.println("[<] " + msg)
+        val timestamp = new java.text.SimpleDateFormat("dd-HH-mm-ss").format(new java.util.Date())        
+        eventLogger.println("[<]["+msgid+"]["+timestamp+"] "+ msg)
         eventLogger.flush()
 
         (msg \ "action").as[String] match {
@@ -310,7 +323,7 @@ class WebSession(remoteIP: String) extends Actor {
       eventLogger.close()
 
     case msg =>
-      clientError("Unknown message: " + msg)
+      clientError("Unknown message: " + msg)(0)
   }
 
   import grammar.examples._
@@ -557,10 +570,7 @@ class WebSession(remoteIP: String) extends Actor {
     val cnfG = CNFConverter.toCNF(g)
     if (cnfG.rules.isEmpty) {
       Last("The grammar accepts/produces no strings! Check if all rules are reachable and productive !")
-    } else {
-      if (debug) {
-        clientLog("Grammar in CNF: " + cnfG)
-      }
+    } else {      
       val equivChecker = new EquivalenceChecker(ref, nOfTests)
       equivChecker.isEquivalentTo(cnfG) match {
         case PossiblyEquivalent => {
