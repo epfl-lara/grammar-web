@@ -368,7 +368,7 @@ class WebSession(remoteIP: String) extends Actor {
 
     case GrammarEx | CNFEx | GNFEx =>
       "<ul>Every line of the input should be a valid production in extended Backus-Naur form" +
-        "<li> A production is of the form &lt;Nonterminal&gt; ::= (or) -> &lt;Rightside&gt; </li>" +
+        "<li> A production is of the form &lt;Nonterminal&gt; ::= &lt;Rightside&gt; (you can also use -> instead of ::= )</li>" +
         "<li>The left side of the first production is considered as the start symbol</li>" +
         "<li>Every symbol that does not appear on the left side of a production is considered a terminal</li>" +
         "<li>A &lt;Nonterminal&gt; is a sequence of alpha-numeric characters and underscore (_), that starts with an alphabet</li>" +
@@ -604,7 +604,7 @@ class WebSession(remoteIP: String) extends Actor {
               //add question mark to the names of the nonterminals
               case (k, Nonterminal(n)) => (k, Nonterminal(n + "?"))
             }
-            msg += "Try Adding: " + rulesToStr(replace(rules, newMap))
+            msg += "Try adding: " + rulesToStr(replace(rules, newMap))
             if (!newnonterms.isEmpty) {
               //println("newnontemrs: " + newnonterms)
               msg + "\nNonterminals with '?' can belong to the grammar or could be a fresh nonterminal"
@@ -617,7 +617,7 @@ class WebSession(remoteIP: String) extends Actor {
 
           case RemoveRules(rules, Some(repairRules)) =>
             "To block the string: \"" + wordToString(w) + "\"" +
-              "\nRemove the rule: " + rules +
+              "\nRemove the rule: " + rulesToStr(rules) +
               " that results in the derivation of the invalid string"
 
           case RefineRules(olds, news, repairRules) =>
