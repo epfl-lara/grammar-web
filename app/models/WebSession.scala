@@ -375,9 +375,9 @@ class WebSession(remoteIP: String) extends Actor {
     case DerivationEx =>
       "<ul><li>A leftmost derivation should have the start symbol on the first line</li>" +
         "<li>Each successive line, referred to as a step of the leftmost derivation, should be a sentential form " +
-        "which is a sequence of nonterminals or terminals separated by whitespace</li>" +
+        "which is a sequence of nonterminals or terminals separated by whitespace. Termianls should not be enclosed within single quotes</li>" +
         "<li>Every step should be obtainable from the previous step by replacing the leftmost nonterminal by one of its productions</li>" +
-        "<li>The last step of the derivation should be the string required to be derived</li></ul>"
+        "<li>The last step of the derivation should be the string that has to be derived</li></ul>"
 
     case GrammarEx | CNFEx | GNFEx =>
       "<ul>Every line of the input should be a valid production in extended Backus-Naur form" +
@@ -532,7 +532,7 @@ class WebSession(remoteIP: String) extends Actor {
       case PossiblyUnambiguous() =>
         "The grammar is possibly unambiguous."
       case AmbiguousString(w) =>
-        "The are at least two parse trees for: " + wordToString(w)
+        "There are at least two parse trees for: " + wordToString(w)
     }
   }
 
