@@ -375,7 +375,7 @@ class WebSession(remoteIP: String) extends Actor {
     case DerivationEx =>
       "<ul><li>A leftmost derivation should have the start symbol on the first line</li>" +
         "<li>Each successive line, referred to as a step of the leftmost derivation, should be a sentential form " +
-        "which is a sequence of nonterminals or terminals separated by whitespace. Termianls should not be enclosed within single quotes</li>" +
+        "which is a sequence of nonterminals or terminals separated by whitespace. Terminals should not be enclosed within single quotes</li>" +
         "<li>Every step should be obtainable from the previous step by replacing the leftmost nonterminal by one of its productions</li>" +
         "<li>The last step of the derivation should be the string that has to be derived</li></ul>"
 
@@ -435,12 +435,12 @@ class WebSession(remoteIP: String) extends Actor {
       case DerivationEx =>
         //here, we expect the userAnswer to be a derivation
         //parse the input string into derivation steps        
-        val (derivationSteps, errmsg) = (new GrammarParser()).parseSententialForms(
+        val (derivationSteps, errmsg) = (new DerivationParser()).parseSententialForms(
           userAnswer.split("\n").toList, gentry.refGrammar)
-        if (derivationSteps.isDefined) {
+        if (errmsg.isEmpty()) {
           //get the last word presented
           if (wordForDerivation.isDefined) {
-            Last(checkDerivation(gentry, derivationSteps.get, wordForDerivation.get))
+            Last(checkDerivation(gentry, derivationSteps, wordForDerivation.get))
           } else
             Last("Cannot find the word to derive. Select the problem and try again!")
         } else
@@ -617,7 +617,7 @@ class WebSession(remoteIP: String) extends Actor {
             msg += "Try adding: " + rulesToStr(replace(rules, newMap))
             if (!newnonterms.isEmpty) {
               //println("newnontemrs: " + newnonterms)
-              msg + "\nNonterminals with '?' can belong to the grammar or could be a fresh nonterminal"
+              msg + "\nNonterminals with '?' could belong to the grammar or could be a fresh nonterminal"
             } else
               msg
 
@@ -654,11 +654,11 @@ class WebSession(remoteIP: String) extends Actor {
     }
 
     val resstr = if (BNFConverter.usesRegOp(studentGrammar)) {
-      "The grammar is in EBNF form. Normalize the grammar."
+      "The grammar is in EBNF form. Click on \"Normalize\" and retry."
     } else {
       val plainGrammar = ebnfToGrammar(studentGrammar)
       if (!CFGrammar.isNormalized(plainGrammar)) {
-        "Some rules are not normalized. Normalize the grammar."
+        "Some rules are not normalized. Click on \"Normalize\" and retry."
       } else {
 
         val cnfG = CNFConverter.toCNF(plainGrammar)
