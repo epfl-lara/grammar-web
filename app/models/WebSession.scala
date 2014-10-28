@@ -25,16 +25,17 @@ import grammar.exercises.ExerciseType
 import play.Logger
 import java.util.Calendar
 import java.io.File
+import grammar.OperationContext
 
 object database1 extends GrammarDatabase(Play.getFile("/public/resources/GrammarDatabase.xml")) {
 }
 
 object Guid {
-  private var id : Long = 0
+  private var id: Long = 0
   def getNextId = {
     id = id + 1
     id
-  }  
+  }
 }
 
 class WebSession(remoteIP: String) extends Actor {
@@ -53,16 +54,16 @@ class WebSession(remoteIP: String) extends Actor {
 
   def pushMessage(v: JsValue) = channel.push(v)
 
-  def clientLog(msg: String)(implicit msgid : Long) = {
+  def clientLog(msg: String)(implicit msgid: Long) = {
     val timestamp = new java.text.SimpleDateFormat("dd-HH-mm-ss").format(new java.util.Date())
-    eventLogger.println("[>]["+msgid+"]["+timestamp+"] "+ msg)
+    eventLogger.println("[>][" + msgid + "][" + timestamp + "] " + msg)
     eventLogger.flush()
     pushMessage(toJson(Map("kind" -> "console", "level" -> "log", "message" -> msg)))
   }
 
   def clientError(msg: String)(implicit msgid: Long) = {
     val timestamp = new java.text.SimpleDateFormat("dd-HH-mm-ss").format(new java.util.Date())
-    eventLogger.println("[>]["+msgid+"]["+timestamp+"] "+ msg)
+    eventLogger.println("[>][" + msgid + "][" + timestamp + "] " + msg)
     eventLogger.flush()
     pushMessage(toJson(Map("kind" -> "console", "level" -> "error", "message" -> msg)))
   }
@@ -77,13 +78,14 @@ class WebSession(remoteIP: String) extends Actor {
   case class Partial(str: String, nextPart: Future[OpRes]) extends OpRes
 
   //a list operation futures
-  var currentOp: Option[Future[OpRes]] = None
-  def recordFuture(opfuture: Future[OpRes], extype: Option[ExerciseType.ExType]) 
-  	(implicit msgid: Long){    
-    currentOp = Some(opfuture)
+  var currentOp: Option[(Future[OpRes], OperationContext)] = None
+  def recordFuture(opfuture: Future[OpRes], opctx: OperationContext, extype: Option[ExerciseType.ExType])
+  	(implicit msgid: Long) {
+    
+    currentOp = Some((opfuture, opctx))
     //register a call-back
     opfuture onComplete {
-      case Success(opRes) if (currentOp == Some(opfuture)) =>
+      case Success(opRes) if (currentOp.isDefined && currentOp.get._1 == opfuture) =>
         opRes match {
           case Last(resstr) =>
             //send the message to the client and complete the operation
@@ -100,15 +102,17 @@ class WebSession(remoteIP: String) extends Actor {
           case Partial(partRes, nextPart) =>
             //send partial result to the client and continue the next operation
             clientLog(partRes)
-            recordFuture(nextPart, extype)
+            recordFuture(nextPart, opctx, extype)
         }
       //else do nothing            
-      case Failure(msg) if (currentOp == Some(opfuture)) =>
+      case Failure(msg) if (currentOp.isDefined && currentOp.get._1 == opfuture) =>
         clientLog("Operation aborted abnormally")
         //print the exception to the console
         println(msg)
 
       case _ =>
+        //for debugging 
+        println(s"operation $msgid terminated")
       //Here, the currentop has been superseeded by another operation 
       //or has been aborted. so ignore the result        
     }
@@ -129,11 +133,11 @@ class WebSession(remoteIP: String) extends Actor {
       sender ! InitSuccess(enumerator)
 
     case FromClient(msg) =>
-       //create a unique id for message
-      implicit val msgid = Guid.getNextId      
+      //create a unique id for message
+      implicit val msgid = Guid.getNextId
       try {
-        val timestamp = new java.text.SimpleDateFormat("dd-HH-mm-ss").format(new java.util.Date())        
-        eventLogger.println("[<]["+msgid+"]["+timestamp+"] "+ msg)
+        val timestamp = new java.text.SimpleDateFormat("dd-HH-mm-ss").format(new java.util.Date())
+        eventLogger.println("[<][" + msgid + "][" + timestamp + "] " + msg)
         eventLogger.flush()
 
         (msg \ "action").as[String] match {
@@ -141,6 +145,12 @@ class WebSession(remoteIP: String) extends Actor {
             clientLog("Welcome!")
 
           case "abortOps" =>
+            //abort the current operation
+            currentOp match {
+              case Some((_, opctx)) =>
+                opctx.abort = true
+              case _ => ;
+            }
             //clear the currentOps
             currentOp = None
             //enable disabled events. However, do not enable more than allowed by the context
@@ -153,7 +163,7 @@ class WebSession(remoteIP: String) extends Actor {
               case None =>
                 //here, enable all to be safe
                 enableEvents(List("getHints", "doCheck"))
-            }
+            }            
 
           case "doUpdateCode" =>
             ;
@@ -217,10 +227,11 @@ class WebSession(remoteIP: String) extends Actor {
                 if (extype.isDefined) {
                   val userAnswer = (msg \ "code").as[String]
                   //create a future for the operation and add it to the futures list
+                  val opctx = new OperationContext()
                   val checkFuture = Future {
-                    checkSolution(gentry, extype.get, userAnswer)
+                    checkSolution(gentry, extype.get, userAnswer)(opctx)
                   }
-                  recordFuture(checkFuture, extype)
+                  recordFuture(checkFuture, opctx, extype)
                   //disable check and hints event, leave 'normalize' untouched              
                   disableEvents(List("getHints", "doCheck"))
 
@@ -290,10 +301,11 @@ class WebSession(remoteIP: String) extends Actor {
                   clientLog("Parse Error:" + errstr)
                 else {
                   //create a future for the operation and add it to the futures list
+                  val opctx = new OperationContext()
                   val hintFuture = Future {
-                    provideHints(ex, bnfGrammar.get)
+                    provideHints(ex, bnfGrammar.get)(opctx)
                   }
-                  recordFuture(hintFuture, None)
+                  recordFuture(hintFuture, opctx, None)
                   //disable hints and do-check, leave normalized untouched
                   disableEvents(List("getHints", "doCheck"))
                 }
@@ -346,8 +358,7 @@ class WebSession(remoteIP: String) extends Actor {
 
   //minimum length of the word that has to be derived
   val minWordLength = 5
-  val maxWordLength = 10
-  val maxIndexToExplore = 500
+  val maxWordLength = 10  
   //TODO: this is not thread safe, make this thread safe by extracting the string from
   //the problem statement
   var wordForDerivation: Option[Word] = None
@@ -406,8 +417,8 @@ class WebSession(remoteIP: String) extends Actor {
         gentry.reference.toHTMLString
     case DerivationEx =>
       //generate a word for derivation      
-      wordForDerivation = (new LazyGenerator(gentry.cnfRef)).genRandomWord(minWordLength,
-        maxWordLength, maxIndexToExplore)
+      wordForDerivation = (new LazyGenerator(gentry.cnfRef)(new OperationContext(
+          maxIndexForGeneration = 500))).genRandomWord(minWordLength, maxWordLength)
       wordForDerivation match {
         case None =>
           "Cannot generate a word for the grammar of size: " + minWordLength
@@ -421,7 +432,7 @@ class WebSession(remoteIP: String) extends Actor {
    * Returns a string (which could be a temporary result) and also continuation
    * if more operation has to be performed
    */
-  def checkSolution(gentry: GrammarEntry, extype: ExType, userAnswer: String): OpRes = {
+  def checkSolution(gentry: GrammarEntry, extype: ExType, userAnswer: String)(implicit opctx: OperationContext): OpRes = {
     extype match {
       case GrammarEx =>
         //here, we expect the user answer to be a grammar in EBNF form
@@ -481,7 +492,7 @@ class WebSession(remoteIP: String) extends Actor {
       }
   }
 
-  def checkCNFSolution(gentry: GrammarEntry, studentGrammar: BNFGrammar): OpRes = {
+  def checkCNFSolution(gentry: GrammarEntry, studentGrammar: BNFGrammar)(implicit opctx: OperationContext): OpRes = {
     if (BNFConverter.usesRegOp(studentGrammar)) {
       Last("The grammar is in EBNF form. You cannot use *,+,? in CNF form")
     } else {
@@ -496,7 +507,7 @@ class WebSession(remoteIP: String) extends Actor {
     }
   }
 
-  def checkGNFSolution(gentry: GrammarEntry, studentGrammar: BNFGrammar): OpRes = {
+  def checkGNFSolution(gentry: GrammarEntry, studentGrammar: BNFGrammar)(implicit opctx: OperationContext): OpRes = {
     if (BNFConverter.usesRegOp(studentGrammar)) {
       Last("The grammar is in EBNF form. You cannot use *,+,? in GNF form")
     } else {
@@ -526,7 +537,7 @@ class WebSession(remoteIP: String) extends Actor {
 
   import clients.AmbiguityChecker._
   def checkAmbiguity(studentGrammar: BNFGrammar): String = {
-    checkForAmbiguity(studentGrammar.cfGrammar) match {
+    checkForAmbiguity(studentGrammar.cfGrammar)(new OperationContext()) match {
       case Unambiguous() =>
         "The grammar is unambiguous."
       case PossiblyUnambiguous() =>
@@ -536,7 +547,7 @@ class WebSession(remoteIP: String) extends Actor {
     }
   }
 
-  def checkGrammarSolution(gentry: GrammarEntry, studentGrammar: BNFGrammar): OpRes = {
+  def checkGrammarSolution(gentry: GrammarEntry, studentGrammar: BNFGrammar)(implicit opctx: OperationContext): OpRes = {
 
     //check if the exercise requires the grammar to be in LL1
     val ll1feedback = if (gentry.isLL1Entry) {
@@ -555,12 +566,10 @@ class WebSession(remoteIP: String) extends Actor {
 
   }
 
-  def checkEquivalence(ref: Grammar, g: Grammar): OpRes = {
-    val nOfTests = 100
-    val debug = false
+  def checkEquivalence(ref: Grammar, g: Grammar)(implicit opctx: OperationContext): OpRes = {        
 
     def proveEquivalence(g1: Grammar, g2: Grammar): Boolean = {
-      val verifier = new EquivalenceVerifier(g1, g2, nOfTests)
+      val verifier = new EquivalenceVerifier(g1, g2)
       verifier.proveEquivalence() match {
         case Some(true) => true
         case _ => false
@@ -570,8 +579,8 @@ class WebSession(remoteIP: String) extends Actor {
     val cnfG = CNFConverter.toCNF(g)
     if (cnfG.rules.isEmpty) {
       Last("The grammar accepts/produces no strings! Check if all rules are reachable and productive !")
-    } else {      
-      val equivChecker = new EquivalenceChecker(ref, nOfTests)
+    } else {
+      val equivChecker = new EquivalenceChecker(ref)
       equivChecker.isEquivalentTo(cnfG) match {
         case PossiblyEquivalent => {
           //print a temporary status message here here, iff this has not been aborted          
@@ -591,14 +600,14 @@ class WebSession(remoteIP: String) extends Actor {
 
         case NotEquivalentNotGeneratedBySolution(ex) =>
           Last("The grammar accepts the invalid string: " + wordToString(ex))
+        case Aborted =>
+          Last("Aborted")
       }
     }
   }
 
-  def provideHints(ex: GrammarEntry, studentGrammar: BNFGrammar): OpRes = {
+  def provideHints(ex: GrammarEntry, studentGrammar: BNFGrammar)(implicit opctx: OperationContext): OpRes = {
 
-    val debug = false
-    val nOfTests = 100
     val maxHintsSize = 5
 
     def prettyPrintFeedbacks(inG: Grammar, resG: Grammar, w: Word, feedbacks: List[GrammarFeedback]) = {
@@ -646,8 +655,8 @@ class WebSession(remoteIP: String) extends Actor {
               else
                 rulesToStr(replace(news.take(5), renameMap)) + " ...")
 
-          case NoRepair =>
-            "Cannot provide hints."
+          case NoRepair(reason) =>
+            "Cannot provide hints: " + reason
         }
         feedbackString
       }).mkString("\n")
@@ -665,7 +674,7 @@ class WebSession(remoteIP: String) extends Actor {
         if (cnfG.rules.isEmpty) {
           "The grammar is empty. Not all rules are produtive and reachable."
         } else {
-          val equivChecker = new EquivalenceChecker(ex.cnfRef, nOfTests)
+          val equivChecker = new EquivalenceChecker(ex.cnfRef)
           val repairer = new Repairer(equivChecker)
           equivChecker.isEquivalentTo(cnfG) match {
             case equivResult @ PossiblyEquivalent =>
@@ -680,6 +689,8 @@ class WebSession(remoteIP: String) extends Actor {
             case equivResult @ NotEquivalentNotGeneratedBySolution(ex) =>
               val (resG, feedbacks) = repairer.hint(cnfG, equivResult)
               prettyPrintFeedbacks(plainGrammar, resG, ex, feedbacks)
+            case Aborted =>
+              "Aborted"
           }
         }
       }
