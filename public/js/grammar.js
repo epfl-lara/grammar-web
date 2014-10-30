@@ -727,6 +727,7 @@ $(document).ready(function() {
     });
     
     $("#button-ll1").click(function(event) {
+    	eventTitle = "LL1 check"
     	if (!$(this).hasClass("disabled")) {
 	      var currentCode = editor.getValue()     
 	      //first save the state
@@ -740,6 +741,7 @@ $(document).ready(function() {
     });
     
     $("#button-amb").click(function(event) {
+    	eventTitle = "Ambiguity check"
     	if (!$(this).hasClass("disabled")) {
 	      var currentCode = editor.getValue()     
 	      //first save the state
