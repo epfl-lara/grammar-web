@@ -301,7 +301,7 @@ class WebSession(remoteIP: String) extends Actor {
                   clientLog("Parse Error:" + errstr)
                 else {
                   //create a future for the operation and add it to the futures list
-                  val opctx = new OperationContext()
+                  val opctx = new OperationContext(enableExpensiveRepair = true)
                   val hintFuture = Future {
                     provideHints(ex, bnfGrammar.get)(opctx)
                   }
