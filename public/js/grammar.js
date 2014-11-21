@@ -526,6 +526,44 @@ $(document).ready(function() {
     						'<div id="desc-space">'+ data.desc +'</div>')    	    	
     }
     
+    handlers["EnterAdminMode"] = function(data) {
+    	$('#login-input').attr("type","hidden")
+    	$('#admin-login').html("")
+    	//display new buttons here    	    	
+    }
+    
+    handlers["RejectAdminAccess"] = function(data) {
+    	$('#login-input').attr("type","hidden")
+    	$('#admin-login').html("")
+    	$('#admin-mode').html('<i class=""></i><span>Admin mode</span>')
+    	notify("Wrong Password", "error")    	
+    }
+    
+    $("#admin-mode").click(function(event) {
+    	eventTitle = "admin mode"
+    	$('#admin-mode').html("")
+    	$('#login-input').attr("type","password")
+    	$('#admin-login').html('<i class=""></i><span>Submit</span>')    	
+    	event.preventDefault() 
+    });
+    
+    $("#admin-login").click(function(event) {
+    	eventTitle = "admin login"    		
+        //send the password to the server     		
+        var passwd = $('#login-input').val()
+    	if(passwd == ""){
+    		notify("Enter a password", "error")
+    	} 
+    	else {
+			msg = JSON.stringify({
+	          action : "adminMode",
+	          password : passwd
+	        })
+	        leonSocket.send(msg);
+    	}
+    	event.preventDefault() 
+    });
+    
 
     function loadProblems() {
       var exid = $('#exercise-select').find(":selected").val()

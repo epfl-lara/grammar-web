@@ -38,6 +38,17 @@ object Guid {
   }
 }
 
+object AdminPassword {
+  /**
+   * Reset the password here.
+   */
+  def checkPassword(pass: String) = {
+    if(pass == "giffy")
+      true
+    else false
+  }
+}
+
 class WebSession(remoteIP: String) extends Actor {
   import Protocol._
   //creating a thread pool for futures
@@ -143,6 +154,12 @@ class WebSession(remoteIP: String) extends Actor {
         (msg \ "action").as[String] match {
           case "hello" =>
             clientLog("Welcome!")
+            
+          case "adminMode" =>
+            if (AdminPassword.checkPassword((msg \ "password").as[String]))
+              event("EnterAdminMode", Map())
+            else
+              event("RejectAdminAccess", Map())
 
           case "abortOps" =>
             //abort the current operation
@@ -497,7 +514,7 @@ class WebSession(remoteIP: String) extends Actor {
       Last("The grammar is in EBNF form. You cannot use *,+,? in CNF form")
     } else {
       val g = ebnfToGrammar(studentGrammar)
-      CFGrammar.getRuleNotInCNF(g) match {
+      CFGrammar.getRuleNotInCNF(g, false) match {
         case None =>
           Partial("The grammar staisfies CNF properties.\nchecking for equivalence...",
             Future { checkEquivalence(gentry.cnfRef, g) })

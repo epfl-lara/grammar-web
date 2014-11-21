@@ -127,6 +127,20 @@ a {
     color: #1133CC;
 }
 
+
+div#title div.login {
+    white-space: nowrap;
+    margin: 12px 0px 0px 30px;
+    float: right;
+    font-size: 1em;
+}
+
+div#title div.login a {
+    float: left;
+    color: white;
+    padding: 0px 3px 1px 6px;
+}
+
 div.toolbox a:link, div.toolbox a:visited, div.toolbox a:hover {
     text-decoration: none;
 }
