@@ -41,9 +41,10 @@ object Guid {
 object AdminPassword {
   /**
    * Reset the password here.
+   * TODO: we can use a SHA or Md5 hash here.
    */
   def checkPassword(pass: String) = {
-    if(pass == "giffy")
+    if (pass == "jiffy")
       true
     else false
   }
@@ -90,9 +91,8 @@ class WebSession(remoteIP: String) extends Actor {
 
   //a list operation futures
   var currentOp: Option[(Future[OpRes], OperationContext)] = None
-  def recordFuture(opfuture: Future[OpRes], opctx: OperationContext, extype: Option[ExerciseType.ExType])
-  	(implicit msgid: Long) {
-    
+  def recordFuture(opfuture: Future[OpRes], opctx: OperationContext, extype: Option[ExerciseType.ExType])(implicit msgid: Long) {
+
     currentOp = Some((opfuture, opctx))
     //register a call-back
     opfuture onComplete {
@@ -139,6 +139,9 @@ class WebSession(remoteIP: String) extends Actor {
     event("enableEvents", events.map(_ -> emptymsg).toMap)
   }
 
+  //keep track of the mode 
+  var adminMode = false
+
   def receive = {
     case Init =>
       sender ! InitSuccess(enumerator)
@@ -154,11 +157,12 @@ class WebSession(remoteIP: String) extends Actor {
         (msg \ "action").as[String] match {
           case "hello" =>
             clientLog("Welcome!")
-            
+
           case "adminMode" =>
-            if (AdminPassword.checkPassword((msg \ "password").as[String]))
+            if (AdminPassword.checkPassword((msg \ "password").as[String])) {
+              adminMode = true
               event("EnterAdminMode", Map())
-            else
+            } else
               event("RejectAdminAccess", Map())
 
           case "abortOps" =>
@@ -180,7 +184,7 @@ class WebSession(remoteIP: String) extends Actor {
               case None =>
                 //here, enable all to be safe
                 enableEvents(List("getHints", "doCheck"))
-            }            
+            }
 
           case "doUpdateCode" =>
             ;
@@ -265,12 +269,8 @@ class WebSession(remoteIP: String) extends Actor {
             if (!bnfGrammar.isDefined)
               clientLog("Parse Error:" + errstr)
             else {
-              //check for ll1 property
-              val ll1feedback = checkLL1(bnfGrammar.get)
-              if (ll1feedback.isEmpty)
-                clientLog("The grammar is in LL(1)")
-              else
-                clientLog(ll1feedback.get)
+              //check for ll1 property              
+              clientLog(checkLL1(bnfGrammar.get).get)
             }
 
           case "checkAmbiguity" =>
@@ -375,7 +375,7 @@ class WebSession(remoteIP: String) extends Actor {
 
   //minimum length of the word that has to be derived
   val minWordLength = 5
-  val maxWordLength = 10  
+  val maxWordLength = 10
   //TODO: this is not thread safe, make this thread safe by extracting the string from
   //the problem statement
   var wordForDerivation: Option[Word] = None
@@ -435,7 +435,7 @@ class WebSession(remoteIP: String) extends Actor {
     case DerivationEx =>
       //generate a word for derivation      
       wordForDerivation = (new LazyGenerator(gentry.cnfRef)(new OperationContext(
-          maxIndexForGeneration = 500))).genRandomWord(minWordLength, maxWordLength)
+        maxIndexForGeneration = 500))).genRandomWord(minWordLength, maxWordLength)
       wordForDerivation match {
         case None =>
           "Cannot generate a word for the grammar of size: " + minWordLength
@@ -539,17 +539,32 @@ class WebSession(remoteIP: String) extends Actor {
     }
   }
 
-  def checkLL1(studentGrammar: BNFGrammar): Option[String] = {
+  def ll1FeedbackStr(studentGrammar: BNFGrammar): (Boolean, String) = {
     if (BNFConverter.usesRegOp(studentGrammar)) {
-      Some("Regular expression operations *,+,? are not supported by the LL1 check." +
+      (false, "Regular expression operations *,+,? are not supported by the LL1 check." +
         "Remove them and retry")
     } else {
       GrammarUtils.isLL1WithFeedback(studentGrammar.cfGrammar) match {
-        case GrammarUtils.InLL1() => None
+        case fb @ GrammarUtils.InLL1() => (true, fb.toString)
         case ll1feedback =>
-          Some(ll1feedback.toString)
+          (false, ll1feedback.toString)
       }
     }
+  }
+
+  def checkLL1(studentGrammar: BNFGrammar): Option[String] = {
+    val ll1checkRes = ll1FeedbackStr(studentGrammar)._2
+    Some(ll1checkRes + "\n" +  (if (this.adminMode) {
+      //if in admin mode include first/follow sets
+      val (nullables, first, follow) = GrammarUtils.nullableFirstFollow(studentGrammar.cfGrammar)
+      "Nullables: "+Util.setString(nullables.toSeq) + "\n" + first.collect {
+        case (k : Nonterminal, v) =>
+          s"""first($k) -> ${Util.setString(v.toSeq)}"""
+      }.mkString("\n") + "\n" + follow.collect {
+        case (k : Nonterminal, v) => s"""follow($k) -> ${Util.setString(v.toSeq)}"""
+      }.mkString("\n")
+    } else
+      ""))
   }
 
   import clients.AmbiguityChecker._
@@ -569,9 +584,9 @@ class WebSession(remoteIP: String) extends Actor {
     //check if the exercise requires the grammar to be in LL1
     val ll1feedback = if (gentry.isLL1Entry) {
       //check for LL1
-      val ll1res = checkLL1(studentGrammar)
-      if (ll1res.isDefined) {
-        "Warning: LL(1) check failed: " + ll1res.get + "\n\n"
+      val ll1res = ll1FeedbackStr(studentGrammar)
+      if (!ll1res._1) {
+        "Warning: LL(1) check failed: " + ll1res._2 + "\n\n"
       } else
         ""
     } else ""
@@ -583,7 +598,7 @@ class WebSession(remoteIP: String) extends Actor {
 
   }
 
-  def checkEquivalence(ref: Grammar, g: Grammar)(implicit opctx: OperationContext): OpRes = {        
+  def checkEquivalence(ref: Grammar, g: Grammar)(implicit opctx: OperationContext): OpRes = {
 
     def proveEquivalence(g1: Grammar, g2: Grammar): Boolean = {
       val verifier = new EquivalenceVerifier(g1, g2)
