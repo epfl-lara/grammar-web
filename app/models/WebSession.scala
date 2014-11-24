@@ -338,6 +338,31 @@ class WebSession(remoteIP: String) extends Actor {
               //log error message
               clientLog("Exercise with id: " + exid + " does not exist")
 
+          case "solve" =>
+            if (!adminMode) {
+              clientLog("'Solve' operation can be invoked only in admin mode.")
+            } else {
+              val pid = (msg \ "problemId").as[String].toInt
+              database1.grammarEntries.find(_.id == pid) match {
+                case None =>
+                  clientLog("There is no grammar in the database with the selected id: " + pid)
+                case Some(gentry) =>
+                  val exid = (msg \ "exerciseId").as[String].toInt
+                  val extype = ExerciseType.getExType(exid)
+                  if (extype.isDefined) {
+                    //get the solution for the exercise and dump it 
+                    val sol = getSolution(gentry, extype.get)
+                    if (sol.isDefined) {
+                      val data = Map("solution" -> toJson(sol.get))
+                      event("fullsolution", data)
+                    } else
+                      clientLog("Cannot solve the problem.")
+                  } else
+                    //log error message
+                    clientLog("Exercise with id: " + exid + " does not exist")
+              }
+            }
+
           case _ =>
             clientError("Error: Unhandled client event " + msg)
         }
@@ -419,6 +444,9 @@ class WebSession(remoteIP: String) extends Actor {
         "<li> &lt;Rightside&gt; is a regular expression over terminals and nonterminals that uses | for disjunction, " +
         "* for closure, white-space for concatenation, parenthesis ( ) for grouping, + for closure without empty string, " +
         " and ? for option (disjunction with empty string)</li></ul>"
+        
+    case CYKEx => 
+      "TODO"
   }
 
   def generateProblemStatement(gentry: GrammarEntry, extype: ExType): String = extype match {
@@ -442,6 +470,36 @@ class WebSession(remoteIP: String) extends Actor {
         case Some(w) =>
           "Provide a leftmost derivation for the word \"" + wordToString(w) +
             "\" from the grammar " + gentry.reference.toHTMLString
+      }
+    case CYKEx => 
+      s"""Show the CYK parse table for the word "${gentry.desc}" of the grammar """ + 
+      	gentry.reference.toHTMLString
+  }
+
+  def getSolution(gentry: GrammarEntry, extype: ExType): Option[String] = extype match {
+    case GrammarEx | CNFEx | GNFEx | DerivationEx =>
+      None
+    case CYKEx =>
+      //For now using description as a tag for the word
+      val g = gentry.cnfRef 
+      val parseStr = gentry.desc.substring(3,gentry.desc.length() - 4)
+      println("Substring: "+parseStr)
+      val (parseWords, errstr) = (new DerivationParser()).parseSententialForms(List(parseStr), g)
+      if (!errstr.isEmpty()){
+        Some(errstr)
+      }
+      else {
+        val parseWord = parseWords(0).map(_.asInstanceOf[Terminal])
+        val (_, cykTable) = (new CYKParser(g)).parseBottomUpWithTable(parseWord)(new OperationContext())
+        //print every entry of the CYK table      
+        val N = cykTable.length
+        var str = ""
+        for (k <- 1 to N) // substring length 
+          for (p <- 0 to (N - k)) { // initial position 
+            val i = p; val j = p + k - 1;
+            str += s"""d($i)($j) = ${cykTable(i)(j)} \n"""
+          }
+        Some(str)
       }
   }
 
@@ -554,14 +612,14 @@ class WebSession(remoteIP: String) extends Actor {
 
   def checkLL1(studentGrammar: BNFGrammar): Option[String] = {
     val ll1checkRes = ll1FeedbackStr(studentGrammar)._2
-    Some(ll1checkRes + "\n" +  (if (this.adminMode) {
+    Some(ll1checkRes + "\n" + (if (this.adminMode) {
       //if in admin mode include first/follow sets
       val (nullables, first, follow) = GrammarUtils.nullableFirstFollow(studentGrammar.cfGrammar)
-      "Nullables: "+Util.setString(nullables.toSeq) + "\n" + first.collect {
-        case (k : Nonterminal, v) =>
+      "Nullables: " + Util.setString(nullables.toSeq) + "\n" + first.collect {
+        case (k: Nonterminal, v) =>
           s"""first($k) -> ${Util.setString(v.toSeq)}"""
       }.mkString("\n") + "\n" + follow.collect {
-        case (k : Nonterminal, v) => s"""follow($k) -> ${Util.setString(v.toSeq)}"""
+        case (k: Nonterminal, v) => s"""follow($k) -> ${Util.setString(v.toSeq)}"""
       }.mkString("\n")
     } else
       ""))

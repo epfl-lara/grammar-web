@@ -529,7 +529,8 @@ $(document).ready(function() {
     handlers["EnterAdminMode"] = function(data) {
     	$('#login-input').attr("type","hidden")
     	$('#admin-login').html("")
-    	//display new buttons here    	    	
+    	//display new buttons here    	    
+    	$('#button-solve').html('<i class="icon-thumbs-up"></i> <span>Solve</span>')
     }
     
     handlers["RejectAdminAccess"] = function(data) {
@@ -537,6 +538,13 @@ $(document).ready(function() {
     	$('#admin-login').html("")
     	$('#admin-mode').html('<i class=""></i><span>Admin mode</span>')
     	notify("Wrong Password", "error")    	
+    }
+    
+    handlers["fullsolution"] = function(data) {
+    	//save the current editor value so that we can go back to it
+    	save(editor.getValue())
+    	editor.setValue(data.solution)
+    	editor.selection.clearSelection();
     }
     
     $("#admin-mode").click(function(event) {
@@ -788,6 +796,27 @@ $(document).ready(function() {
 	        {action: "checkAmbiguity", code : currentCode }
 	      )
 	      leonSocket.send(msg)
+    	}
+    	event.preventDefault() 
+    });
+    
+    $("#button-solve").click(function(event) {
+    	eventTitle = "Solve event"    		
+    	if (!$(this).hasClass("disabled")) {
+	      //var currentCode = editor.getValue()     	      
+		  //get 'id' of the selected problem
+	  	  var exid = $('#exercise-select').find(":selected").val()
+	  	  var pid = $('#example-loader').find(":selected").val()
+	  	  if(exid == "")
+	  		  notify("Excercise not selected!", "error")
+	        if(pid == "")
+	      	  notify("Problem not selected!", "error")
+	        else {          
+	  	      var msg = JSON.stringify(
+	  	        {action: "solve", exerciseId: exid, problemId : pid }
+	  	      )
+	  	      leonSocket.send(msg)          
+	        }
     	}
     	event.preventDefault() 
     });
