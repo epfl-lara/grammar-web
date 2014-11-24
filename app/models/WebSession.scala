@@ -350,8 +350,9 @@ class WebSession(remoteIP: String) extends Actor {
                   val exid = (msg \ "exerciseId").as[String].toInt
                   val extype = ExerciseType.getExType(exid)
                   if (extype.isDefined) {
+                    val userAnswer = (msg \ "code").as[String]
                     //get the solution for the exercise and dump it 
-                    val sol = getSolution(gentry, extype.get)
+                    val sol = getSolution(gentry, extype.get, userAnswer)
                     if (sol.isDefined) {
                       val data = Map("solution" -> toJson(sol.get))
                       event("fullsolution", data)
@@ -472,24 +473,28 @@ class WebSession(remoteIP: String) extends Actor {
             "\" from the grammar " + gentry.reference.toHTMLString
       }
     case CYKEx => 
-      s"""Show the CYK parse table for the word "${gentry.desc}" of the grammar """ + 
-      	gentry.reference.toHTMLString
+      s"""Show the CYK parse table for the word "${wordToString(gentry.word.get)}" of the grammar """ + 
+      	renameAutoSymbols(gentry.cnfRef).toHTMLString
   }
 
-  def getSolution(gentry: GrammarEntry, extype: ExType): Option[String] = extype match {
+  def getSolution(gentry: GrammarEntry, extype: ExType, userAnswer: String): Option[String] = extype match {
     case GrammarEx | CNFEx | GNFEx | DerivationEx =>
       None
     case CYKEx =>
-      //For now using description as a tag for the word
-      val g = gentry.cnfRef 
-      val parseStr = gentry.desc.substring(3,gentry.desc.length() - 4)
-      println("Substring: "+parseStr)
-      val (parseWords, errstr) = (new DerivationParser()).parseSententialForms(List(parseStr), g)
-      if (!errstr.isEmpty()){
-        Some(errstr)
-      }
+      //Note: here we are relying on the determinism of the renameAutoSymbols.
+      //val g = renameAutoSymbols(gentry.cnfRef)
+      //For now read the solution from the input/
+      //TODO: fix this
+      //here, we expect the user answer to be a grammar in EBNF form
+      val rules = userAnswer.split("\n").toList
+      val (bnfGrammar, errstr) = (new GrammarParser()).parseGrammar(rules)
+      if (!bnfGrammar.isDefined)
+        Some("Parse Error:" + errstr)
       else {
-        val parseWord = parseWords(0).map(_.asInstanceOf[Terminal])
+        val g = bnfGrammar.get.cfGrammar
+        val word = gentry.word.get
+        //println("Word to parse: " + word)
+        val parseWord = word.map(_.asInstanceOf[Terminal])
         val (_, cykTable) = (new CYKParser(g)).parseBottomUpWithTable(parseWord)(new OperationContext())
         //print every entry of the CYK table      
         val N = cykTable.length
@@ -497,7 +502,7 @@ class WebSession(remoteIP: String) extends Actor {
         for (k <- 1 to N) // substring length 
           for (p <- 0 to (N - k)) { // initial position 
             val i = p; val j = p + k - 1;
-            str += s"""d($i)($j) = ${cykTable(i)(j)} \n"""
+            str += s"""d($i)($j) = ${Util.setString(cykTable(i)(j).toSeq)} \n"""
           }
         Some(str)
       }
@@ -521,7 +526,7 @@ class WebSession(remoteIP: String) extends Actor {
       case DerivationEx =>
         //here, we expect the userAnswer to be a derivation
         //parse the input string into derivation steps        
-        val (derivationSteps, errmsg) = (new DerivationParser()).parseSententialForms(
+        val (derivationSteps, errmsg) = (new SententialFormParser()).parseSententialForms(
           userAnswer.split("\n").toList, gentry.refGrammar)
         if (errmsg.isEmpty()) {
           //get the last word presented
@@ -704,7 +709,7 @@ class WebSession(remoteIP: String) extends Actor {
       //pretty print feedbacks by renaming new non-terminals to simpler names
       val newnonterms = resG.nonTerminals.filterNot(CNFConverter.isCNFNonterminal _).toSet --
         nonterminals(inG)
-      val renameMap = genRenameMap(newnonterms, nonterminals(resG))
+      val renameMap = genRenameMap(newnonterms.toList, nonterminals(resG))
       feedbacks.map(f => {
         val feedbackString = f match {
           case AddAllRules(rules) =>

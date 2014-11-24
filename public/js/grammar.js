@@ -802,8 +802,7 @@ $(document).ready(function() {
     
     $("#button-solve").click(function(event) {
     	eventTitle = "Solve event"    		
-    	if (!$(this).hasClass("disabled")) {
-	      //var currentCode = editor.getValue()     	      
+    	if (!$(this).hasClass("disabled")) {	           	      
 		  //get 'id' of the selected problem
 	  	  var exid = $('#exercise-select').find(":selected").val()
 	  	  var pid = $('#example-loader').find(":selected").val()
@@ -812,8 +811,9 @@ $(document).ready(function() {
 	        if(pid == "")
 	      	  notify("Problem not selected!", "error")
 	        else {          
+	          var currentCode = editor.getValue()
 	  	      var msg = JSON.stringify(
-	  	        {action: "solve", exerciseId: exid, problemId : pid }
+	  	        {action: "solve", exerciseId: exid, problemId : pid, code : currentCode }
 	  	      )
 	  	      leonSocket.send(msg)          
 	        }
