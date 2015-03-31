@@ -16,7 +16,6 @@ import grammar.exercises._
 import grammar.EBNFGrammar.BNFGrammar
 import grammar.CFGrammar.Grammar
 import grammar.BNFConverter
-import parsing.CNFConverter
 import grammar.CFGrammar
 import java.util.concurrent.Executors
 import scala.util.Success
@@ -26,8 +25,10 @@ import play.Logger
 import java.util.Calendar
 import java.io.File
 import grammar.OperationContext
+///import grammar.CNFConverter
 
-object database1 extends GrammarDatabase(Play.getFile("/public/resources/GrammarDatabase.xml")) {
+object grammarDB {
+  val db = GrammarDatabase.readGrammarDatabase(Play.getFile("/public/resources/GrammarDatabase.xml"))
 }
 
 object Guid {
@@ -141,6 +142,17 @@ class WebSession(remoteIP: String) extends Actor {
 
   //keep track of the mode 
   var adminMode = false
+  
+  def getOperationContext = new OperationContext(nOfTestcases = 100, 
+      maxSize = 11,  
+      verificationTimeout = 10, //in seconds
+      testsForVerification = 100, 
+      maxSizeForVerification = 11, 
+      consecWordsForAmbiguityCheck = 300,
+      enableExpensiveRepair = true, 
+      nCorrectWordsForRepair = 100,
+      enableStats = false)
+  //other parameters take default values
 
   def receive = {
     case Init =>
@@ -206,7 +218,7 @@ class WebSession(remoteIP: String) extends Actor {
             val exid = (msg \ "exerciseId").as[String].toInt
             val exType = ExerciseType.getExType(exid)
             if (exType.isDefined) {
-              val grammarEntries = database1.entriesForExercise(exType.get)
+              val grammarEntries = grammarDB.db.entriesForExercise(exType.get)
               //send all grammarEntries
               val data = generateProblemList(grammarEntries).map { case (k, v) => (k -> toJson(v)) }.toMap
               event("problems", data)
@@ -222,7 +234,7 @@ class WebSession(remoteIP: String) extends Actor {
 
           case "loadExercise" =>
             val pid = (msg \ "problemId").as[String].toInt
-            val data = database1.grammarEntries.find(_.id == pid) match {
+            val data = grammarDB.db.grammarEntries.find(_.id == pid) match {
               case None =>
                 Map("desc" -> toJson("There is no grammar in the database with the given id: " + pid))
               case Some(gentry) =>
@@ -239,7 +251,7 @@ class WebSession(remoteIP: String) extends Actor {
 
           case "doCheck" =>
             val pid = (msg \ "problemId").as[String].toInt
-            database1.grammarEntries.find(_.id == pid) match {
+            grammarDB.db.grammarEntries.find(_.id == pid) match {
               case None =>
                 clientLog("There is no grammar in the database with the given id: " + pid)
               case Some(gentry) =>
@@ -248,7 +260,7 @@ class WebSession(remoteIP: String) extends Actor {
                 if (extype.isDefined) {
                   val userAnswer = (msg \ "code").as[String]
                   //create a future for the operation and add it to the futures list
-                  val opctx = new OperationContext()
+                  val opctx = getOperationContext
                   val checkFuture = Future {
                     checkSolution(gentry, extype.get, userAnswer)(opctx)
                   }
@@ -281,7 +293,7 @@ class WebSession(remoteIP: String) extends Actor {
             if (!bnfGrammar.isDefined)
               clientLog("Parse Error:" + errstr)
             else {
-              clientLog(checkAmbiguity(bnfGrammar.get))
+              clientLog(checkAmbiguity(bnfGrammar.get)(getOperationContext))
             }
 
           case "normalize" =>
@@ -292,20 +304,15 @@ class WebSession(remoteIP: String) extends Actor {
             if (!bnfGrammar.isDefined)
               clientLog("Parse Error:" + errstr)
             else {
-              //convert the grammar to cnf form and then reconvert
-              val normalization =
-                (BNFConverter.ebnfToGrammar _
-                  andThen CNFConverter.toCNF
-                  andThen CNFConverter.cnfToGrammar
-                  andThen CFGrammar.renameAutoSymbols)
-              val normalGrammar = normalization(bnfGrammar.get)
+              //convert the grammar to cnf form and then reconvert              
+              val normalGrammar = CFGrammar.prettyPrint(bnfGrammar.get.cfGrammar.fromCNF) 
               val data = Map("grammar" -> toJson(normalGrammar.toString))
               event("replace_grammar", data)
             }
 
           case "getHints" =>
             val pid = (msg \ "problemId").as[String].toInt
-            val exercise = database1.grammarEntries.find(_.id == pid)
+            val exercise = grammarDB.db.grammarEntries.find(_.id == pid)
             exercise match {
               case None =>
                 clientLog("There is no exercise with the given id")
@@ -318,7 +325,7 @@ class WebSession(remoteIP: String) extends Actor {
                   clientLog("Parse Error:" + errstr)
                 else {
                   //create a future for the operation and add it to the futures list
-                  val opctx = new OperationContext(enableExpensiveRepair = true, nOfTestcases = 100, nCorrectWordsForRepair = 100)
+                  val opctx = getOperationContext
                   val hintFuture = Future {
                     provideHints(ex, bnfGrammar.get)(opctx)
                   }
@@ -343,7 +350,7 @@ class WebSession(remoteIP: String) extends Actor {
               clientLog("'Solve' operation can be invoked only in admin mode.")
             } else {
               val pid = (msg \ "problemId").as[String].toInt
-              database1.grammarEntries.find(_.id == pid) match {
+              grammarDB.db.grammarEntries.find(_.id == pid) match {
                 case None =>
                   clientLog("There is no grammar in the database with the selected id: " + pid)
                 case Some(gentry) =>
@@ -390,7 +397,7 @@ class WebSession(remoteIP: String) extends Actor {
   import EBNFGrammar._
   import BNFConverter._
   import equivalence._
-  import generators.LazyGenerator
+  import generators.SizeBasedRandomAccessGenerator
   import grammar.exercises._
   import repair.RepairResult._
   import clients._
@@ -401,7 +408,8 @@ class WebSession(remoteIP: String) extends Actor {
 
   //minimum length of the word that has to be derived
   val minWordLength = 5
-  val maxWordLength = 10
+  val maxWordLength = 10  
+  
   //TODO: this is not thread safe, make this thread safe by extracting the string from
   //the problem statement
   var wordForDerivation: Option[Word] = None
@@ -462,15 +470,19 @@ class WebSession(remoteIP: String) extends Actor {
       "Convert the following grammar to Griebach normal form " +
         gentry.reference.toHTMLString
     case DerivationEx =>
-      //generate a word for derivation      
-      wordForDerivation = (new LazyGenerator(gentry.cnfRef)(new OperationContext(
-        maxIndexForGeneration = 500))).genRandomWord(minWordLength, maxWordLength)
-      wordForDerivation match {
-        case None =>
-          "Cannot generate a word for the grammar of size: " + minWordLength
-        case Some(w) =>
-          "Provide a leftmost derivation for the word \"" + wordToString(w) +
-            "\" from the grammar " + gentry.reference.toHTMLString
+      //generate a word for derivations      
+      val studg = gentry.refGrammar.fromCNF      
+      //select a random length
+      val randLen = minWordLength + (new java.util.Random()).nextInt(maxWordLength - minWordLength)
+      val opctx = getOperationContext
+      val gen = (new SizeBasedRandomAccessGenerator(studg,maxWordLength)(opctx)).getSamplingEnumerator(studg.start, randLen, 1)
+      if (gen.hasNext) {
+        val w = gen.next
+        wordForDerivation = Some(w)
+        "Provide a leftmost derivation for the word \"" + wordToString(w) +
+          "\" from the grammar " + gentry.reference.toHTMLString
+      } else {
+        "Cannot generate a word for the grammar of size: " + minWordLength
       }
     case CYKEx => 
       s"""Show the CYK parse table for the word "${wordToString(gentry.word.get)}" of the grammar """ + 
@@ -481,11 +493,6 @@ class WebSession(remoteIP: String) extends Actor {
     case GrammarEx | CNFEx | GNFEx | DerivationEx =>
       None
     case CYKEx =>
-      //Note: here we are relying on the determinism of the renameAutoSymbols.
-      //val g = renameAutoSymbols(gentry.cnfRef)
-      //For now read the solution from the input/
-      //TODO: fix this
-      //here, we expect the user answer to be a grammar in EBNF form
       val rules = userAnswer.split("\n").toList
       val (bnfGrammar, errstr) = (new GrammarParser()).parseGrammar(rules)
       if (!bnfGrammar.isDefined)
@@ -495,7 +502,7 @@ class WebSession(remoteIP: String) extends Actor {
         val word = gentry.word.get
         //println("Word to parse: " + word)
         val parseWord = word.map(_.asInstanceOf[Terminal])
-        val (_, cykTable) = (new CYKParser(g)).parseBottomUpWithTable(parseWord)(new OperationContext())
+        val (_, cykTable) = (new CYKParser(g)).parseBottomUpWithTable(parseWord)(getOperationContext)
         //print every entry of the CYK table      
         val N = cykTable.length
         var str = ""
@@ -551,6 +558,9 @@ class WebSession(remoteIP: String) extends Actor {
           Last("Parse Error:" + errstr)
         else
           checkGNFSolution(gentry, bnfGrammar.get)
+          
+      case CYKEx =>
+        Last("Operation not yet supported")
     }
   }
 
@@ -576,7 +586,7 @@ class WebSession(remoteIP: String) extends Actor {
     if (BNFConverter.usesRegOp(studentGrammar)) {
       Last("The grammar is in EBNF form. You cannot use *,+,? in CNF form")
     } else {
-      val g = ebnfToGrammar(studentGrammar)
+      val g = studentGrammar.cfGrammar 
       CFGrammar.getRuleNotInCNF(g, false) match {
         case None =>
           Partial("The grammar staisfies CNF properties.\nchecking for equivalence...",
@@ -591,7 +601,7 @@ class WebSession(remoteIP: String) extends Actor {
     if (BNFConverter.usesRegOp(studentGrammar)) {
       Last("The grammar is in EBNF form. You cannot use *,+,? in GNF form")
     } else {
-      val g = ebnfToGrammar(studentGrammar)
+      val g = studentGrammar.cfGrammar 
       CFGrammar.getRuleNotInGNF(g) match {
         case None =>
           Partial("The grammar staisfies GNF properties.\nchecking for equivalence...",
@@ -630,15 +640,17 @@ class WebSession(remoteIP: String) extends Actor {
       ""))
   }
 
-  import clients.AmbiguityChecker._
-  def checkAmbiguity(studentGrammar: BNFGrammar): String = {
-    checkForAmbiguity(studentGrammar.cfGrammar)(new OperationContext()) match {
-      case Unambiguous() =>
-        "The grammar is unambiguous."
-      case PossiblyUnambiguous() =>
+  import AmbiguityChecker._
+  def checkAmbiguity(studentGrammar: BNFGrammar)(implicit opctx: OperationContext): String = {
+    val g = studentGrammar.cfGrammar
+    val ambChecker = new AmbiguityChecker(g) 
+    ambChecker.checkAmbiguityInStudentGrammar() match {
+      case List() =>
         "The grammar is possibly unambiguous."
-      case AmbiguousString(w) =>
-        "There are at least two parse trees for: " + wordToString(w)
+        //"The grammar is unambiguous."
+      case AmbiguityWitness(ant, w) :: _ =>
+        s"Nonterminal $ant is ambiguous "+
+        s"- there are at least two parse trees for ${wordToString(w)}" 
     }
   }
 
@@ -653,7 +665,7 @@ class WebSession(remoteIP: String) extends Actor {
       } else
         ""
     } else ""
-    checkEquivalence(gentry.cnfRef, studentGrammar.cfGrammar) match {
+    checkEquivalence(gentry.refGrammar, studentGrammar.cfGrammar) match {
       case Last(resstr) =>
         Last(ll1feedback + resstr)
       case Partial(resstr, nextPart) => Partial(ll1feedback + resstr, nextPart)
@@ -670,33 +682,26 @@ class WebSession(remoteIP: String) extends Actor {
         case _ => false
       }
     }
-
-    val cnfG = CNFConverter.toCNF(g)
-    if (cnfG.rules.isEmpty) {
+    
+    if (g.cnfGrammar.rules.isEmpty) {
       Last("The grammar accepts/produces no strings! Check if all rules are reachable and productive !")
-    } else {
-      val equivChecker = new EquivalenceChecker(ref)
-      equivChecker.isEquivalentTo(cnfG) match {
-        case PossiblyEquivalent => {
+    } else {      
+      (new StudentGrammarEquivalenceChecker(ref)).isEquivalentTo(g) match {
+        case List() => {
           //print a temporary status message here here, iff this has not been aborted          
           Partial("All testcases passed.\nProving equivalence ... ",
             Future {
-              Last(if (proveEquivalence(equivChecker.cnfRef, cnfG))
+              Last(if (proveEquivalence(ref, g))
                 "Correct."
               else
                 "Possibly correct but unable to prove correctness.")
             })
-        }
-        case InadequateTestcases =>
-          Last("Cannot generate enough testcases to prove correctness.\n" +
-            "Make the grammar less ambiguous and try again!")
-        case NotEquivalentNotAcceptedBySolution(ex) =>
+        }        
+        case NotEquivalentNotAcceptedBySolution(ex) :: _ =>
           Last("The grammar does not accept the string: " + wordToString(ex))
 
-        case NotEquivalentNotGeneratedBySolution(ex) =>
-          Last("The grammar accepts the invalid string: " + wordToString(ex))
-        case Aborted =>
-          Last("Aborted")
+        case NotEquivalentGeneratedBySolution(ex) :: _ =>
+          Last("The grammar generates the invalid string: " + wordToString(ex))
       }
     }
   }
@@ -781,7 +786,7 @@ class WebSession(remoteIP: String) extends Actor {
               val (resG, feedbacks) = repairer.hint(cnfG, equivResult)
               prettyPrintFeedbacks(plainGrammar, resG, ex, feedbacks)
 
-            case equivResult @ NotEquivalentNotGeneratedBySolution(ex) =>
+            case equivResult @ NotEquivalentGeneratedBySolution(ex) =>
               val (resG, feedbacks) = repairer.hint(cnfG, equivResult)
               prettyPrintFeedbacks(plainGrammar, resG, ex, feedbacks)
             case Aborted =>
