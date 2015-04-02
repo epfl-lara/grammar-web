@@ -242,8 +242,14 @@ class WebSession(remoteIP: String) extends Actor {
                 val extype = ExerciseType.getExType(exid)
                 //clientLog("Exercise ID: "+exid+" grammar: "+gentry.reference)
                 if (extype.isDefined) {
-                  val data = Map("desc" -> toJson(generateProblemStatement(gentry, extype.get)))
+                  val (stmt, initialGrammar) = generateProblemStatement(gentry, extype.get)                  
+                  val data = Map("desc" -> toJson(stmt))                  
                   event("exerciseDesc", data)
+                  //some problems have an initial answer that the users have to refine 
+                  if(initialGrammar.isDefined){
+                    val data = Map("grammar" -> toJson(initialGrammar.toString))
+                    event("replace_grammar", data)	
+                  }                  
                 } else
                   //log error message
                   clientLog("Exercise with id: " + exid + " does not exist")
@@ -459,17 +465,17 @@ class WebSession(remoteIP: String) extends Actor {
       "TODO"
   }
 
-  def generateProblemStatement(gentry: GrammarEntry, extype: ExType): String = extype match {
+  def generateProblemStatement(gentry: GrammarEntry, extype: ExType) : (String, Option[BNFGrammar]) = extype match {
     case GrammarEx if gentry.isLL1Entry =>
-      "Provide an LL(1) grammar for " + gentry.desc
+      ("Provide an LL(1) grammar for " + gentry.desc, None)
     case GrammarEx =>
-      "Provide a grammar for " + gentry.desc
+      ("Provide a grammar for " + gentry.desc, None)
     case CNFEx =>
-      "Convert the following grammar to Chomsky normal form " +
-        gentry.reference.toHTMLString
+      ("Convert the following grammar to Chomsky normal form " +
+        gentry.reference.toHTMLString, None)
     case GNFEx =>
-      "Convert the following grammar to Griebach normal form " +
-        gentry.reference.toHTMLString
+      ("Convert the following grammar to Griebach normal form " +
+        gentry.reference.toHTMLString, None)
     case DerivationEx =>
       //generate a word for derivations      
       val studg = gentry.refGrammar.fromCNF      
@@ -487,23 +493,27 @@ class WebSession(remoteIP: String) extends Actor {
       }
       wordForDerivation match {
         case Some(w) =>
-          "Provide a leftmost derivation for the word \"" + wordToString(w) +
-            "\" from the grammar " + gentry.reference.toHTMLString
+          ("Provide a leftmost derivation for the word \"" + wordToString(w) +
+            "\" from the grammar " + gentry.reference.toHTMLString, None)
         case _ =>
-          "Cannot generate a word for the grammar of size: " + minWordLength
+          ("Cannot generate a word for the grammar of size: " + minWordLength, None)
       }
     case CYKEx => 
-      s"""Show the CYK parse table for the word "${wordToString(gentry.word.get)}" of the grammar """ + 
-      	renameAutoSymbols(gentry.cnfRef).toHTMLString
+      (s"""Show the CYK parse table for the word "${wordToString(gentry.word.get)}" of the grammar """ + 
+      	renameAutoSymbols(gentry.cnfRef).toHTMLString, None)
     case ProgLangEx =>
-      s"""Refine the grammar for ${gentry.desc} so that it does not accept syntactically incorrect"""+
-      	s""" programs by removing counter-examples found."""+
-      	renameAutoSymbols(gentry.cnfRef).toHTMLString
+      val stmt = s"""Refine the grammar for ${gentry.desc} shown in the editor"""+ 
+      " so that it does not accept syntactically incorrect"+
+      	" programs by eliminating the counter-examples."
+      val initGrammar = gentry.initGrammar
+      if(!initGrammar.isDefined)
+        throw new IllegalStateException("Initial grammar is not defined for problem: "+gentry.id)
+      (stmt, initGrammar)
   }
 
   def getSolution(gentry: GrammarEntry, extype: ExType, userAnswer: String): Option[String] = extype match {
-    case GrammarEx | CNFEx | GNFEx | DerivationEx =>
-      None
+    case GrammarEx | CNFEx | GNFEx | DerivationEx | ProgLangEx =>
+      Some("Operation not supported!")
     case CYKEx =>
       val rules = userAnswer.split("\n").toList
       val (bnfGrammar, errstr) = (new GrammarParser()).parseGrammar(rules)
@@ -531,7 +541,8 @@ class WebSession(remoteIP: String) extends Actor {
    * Returns a string (which could be a temporary result) and also continuation
    * if more operation has to be performed
    */
-  def checkSolution(gentry: GrammarEntry, extype: ExType, userAnswer: String)(implicit opctx: OperationContext): OpRes = {
+  def checkSolution(gentry: GrammarEntry, extype: ExType, userAnswer: String)
+  	(implicit opctx: OperationContext): OpRes = {
     extype match {
       case GrammarEx =>
         //here, we expect the user answer to be a grammar in EBNF form
@@ -573,6 +584,16 @@ class WebSession(remoteIP: String) extends Actor {
           
       case CYKEx =>
         Last("Operation not yet supported")
+      
+      case ProgLangEx => 
+        //here, we expect the user answer to be a grammar in EBNF form
+        val rules = userAnswer.split("\n").toList
+        //try to parse the grammar (syntax errors will be displayed in the console)
+        val (bnfGrammar, errstr) = (new GrammarParser()).parseGrammar(rules)
+        if (!bnfGrammar.isDefined)
+          Last("Parse Error:" + errstr)
+        else
+          checkProgLangSolution(gentry, bnfGrammar.get)
     }
   }
 
@@ -715,6 +736,45 @@ class WebSession(remoteIP: String) extends Actor {
         case NotEquivalentGeneratedBySolution(ex) :: _ =>
           Last("The grammar generates the invalid string: " + wordToString(ex))
       }
+    }
+  }
+  
+  /**
+   * For now not proving equivalence here
+   */
+   def checkProgLangSolution(gentry: GrammarEntry, studentGrammar: BNFGrammar)
+   	(implicit opctx: OperationContext): OpRes = {
+    
+    val ref = gentry.refGrammar
+    val g = studentGrammar.cfGrammar
+    
+    if (g.cnfGrammar.rules.isEmpty) {
+      Last("The grammar accepts/produces no strings! "+
+          "Check if all rules are reachable and productive !")
+    } else {      
+      (new StudentGrammarEquivalenceChecker(ref)).isEquivalentTo(g) match {
+        case List() => {
+          //print a temporary status message here here, iff this has not been aborted          
+          Partial("All testcases passed.\nProving equivalence ... ",
+            Future {
+              Last(if (proveEquivalence(ref, g))
+                "Correct."
+              else
+                "Possibly correct but unable to prove correctness.")
+            })
+        }        
+        case NotEquivalentNotAcceptedBySolution(ex) :: _ =>
+          Last("The grammar does not accept the string: " + wordToString(ex))
+
+        case NotEquivalentGeneratedBySolution(ex) :: _ =>
+          Last("The grammar generates the invalid string: " + wordToString(ex))
+      }
+    }
+
+    checkEquivalence() match {
+      case Last(resstr) =>
+        Last(ll1feedback + resstr)
+      case Partial(resstr, nextPart) => Partial(ll1feedback + resstr, nextPart)
     }
   }
 
