@@ -409,6 +409,7 @@ class WebSession(remoteIP: String) extends Actor {
   //minimum length of the word that has to be derived
   val minWordLength = 5
   val maxWordLength = 10  
+  val maxTries = 10
   
   //TODO: this is not thread safe, make this thread safe by extracting the string from
   //the problem statement
@@ -472,20 +473,31 @@ class WebSession(remoteIP: String) extends Actor {
     case DerivationEx =>
       //generate a word for derivations      
       val studg = gentry.refGrammar.fromCNF      
-      //select a random length
-      val randLen = minWordLength + (new java.util.Random()).nextInt(maxWordLength - minWordLength)
-      val opctx = getOperationContext
-      val gen = (new SizeBasedRandomAccessGenerator(studg,maxWordLength)(opctx)).getSamplingEnumerator(studg.start, randLen, 1)
-      if (gen.hasNext) {
-        val w = gen.next
-        wordForDerivation = Some(w)
-        "Provide a leftmost derivation for the word \"" + wordToString(w) +
-          "\" from the grammar " + gentry.reference.toHTMLString
-      } else {
-        "Cannot generate a word for the grammar of size: " + minWordLength
+      //select a random length and select a word of that length at random, until a word is found
+      var tries = 0
+      wordForDerivation = None
+      while (!wordForDerivation.isDefined && tries < maxTries) {
+        val randLen = minWordLength + (new java.util.Random()).nextInt(maxWordLength - minWordLength)
+        val opctx = getOperationContext
+        val gen = (new SizeBasedRandomAccessGenerator(studg, maxWordLength)(opctx)).getSamplingEnumerator(studg.start, randLen, 1)
+        if (gen.hasNext) {          
+          wordForDerivation = Some(gen.next)
+        }
+        tries += 1
+      }
+      wordForDerivation match {
+        case Some(w) =>
+          "Provide a leftmost derivation for the word \"" + wordToString(w) +
+            "\" from the grammar " + gentry.reference.toHTMLString
+        case _ =>
+          "Cannot generate a word for the grammar of size: " + minWordLength
       }
     case CYKEx => 
       s"""Show the CYK parse table for the word "${wordToString(gentry.word.get)}" of the grammar """ + 
+      	renameAutoSymbols(gentry.cnfRef).toHTMLString
+    case ProgLangEx =>
+      s"""Refine the grammar for ${gentry.desc} so that it does not accept syntactically incorrect"""+
+      	s""" programs by removing counter-examples found."""+
       	renameAutoSymbols(gentry.cnfRef).toHTMLString
   }
 
