@@ -24,11 +24,13 @@ import grammar.exercises.ExerciseType
 import play.Logger
 import java.util.Calendar
 import java.io.File
-import grammar.OperationContext
+import grammar._
 ///import grammar.CNFConverter
 
 object grammarDB {
-  val db = GrammarDatabase.readGrammarDatabase(Play.getFile("/public/resources/GrammarDatabase.xml"))
+  val db = GrammarDatabase.readGrammarDatabase(
+      Play.getFile("/public/resources/GrammarDatabase.xml"),
+      Play.getFile("/public/resources/").getAbsolutePath())
 }
 
 object Guid {
@@ -91,8 +93,9 @@ class WebSession(remoteIP: String) extends Actor {
   case class Partial(str: String, nextPart: Future[OpRes]) extends OpRes
 
   //a list operation futures
-  var currentOp: Option[(Future[OpRes], OperationContext)] = None
-  def recordFuture(opfuture: Future[OpRes], opctx: OperationContext, extype: Option[ExerciseType.ExType])(implicit msgid: Long) {
+  var currentOp: Option[(Future[OpRes], GlobalContext)] = None
+  def recordFuture(opfuture: Future[OpRes], opctx: GlobalContext, extype: Option[ExerciseType.ExType])
+  	(implicit msgid: Long) {
 
     currentOp = Some((opfuture, opctx))
     //register a call-back
@@ -143,16 +146,7 @@ class WebSession(remoteIP: String) extends Actor {
   //keep track of the mode 
   var adminMode = false
   
-  def getOperationContext = new OperationContext(nOfTestcases = 100, 
-      maxSize = 11,  
-      verificationTimeout = 10, //in seconds
-      testsForVerification = 100, 
-      maxSizeForVerification = 11, 
-      consecWordsForAmbiguityCheck = 300,
-      enableExpensiveRepair = true, 
-      nCorrectWordsForRepair = 100,
-      enableStats = false)
-  //other parameters take default values
+  def getGlobalContext = new GlobalContext()   
 
   def receive = {
     case Init =>
@@ -247,7 +241,7 @@ class WebSession(remoteIP: String) extends Actor {
                   event("exerciseDesc", data)
                   //some problems have an initial answer that the users have to refine 
                   if(initialGrammar.isDefined){
-                    val data = Map("grammar" -> toJson(initialGrammar.toString))
+                    val data = Map("grammar" -> toJson(initialGrammar.get.toString))
                     event("replace_grammar", data)	
                   }                  
                 } else
@@ -266,7 +260,7 @@ class WebSession(remoteIP: String) extends Actor {
                 if (extype.isDefined) {
                   val userAnswer = (msg \ "code").as[String]
                   //create a future for the operation and add it to the futures list
-                  val opctx = getOperationContext
+                  val opctx = getGlobalContext
                   val checkFuture = Future {
                     checkSolution(gentry, extype.get, userAnswer)(opctx)
                   }
@@ -299,7 +293,7 @@ class WebSession(remoteIP: String) extends Actor {
             if (!bnfGrammar.isDefined)
               clientLog("Parse Error:" + errstr)
             else {
-              clientLog(checkAmbiguity(bnfGrammar.get)(getOperationContext))
+              clientLog(checkAmbiguity(bnfGrammar.get)(getGlobalContext))
             }
 
           case "normalize" =>
@@ -331,7 +325,7 @@ class WebSession(remoteIP: String) extends Actor {
                   clientLog("Parse Error:" + errstr)
                 else {
                   //create a future for the operation and add it to the futures list
-                  val opctx = getOperationContext
+                  val opctx = getGlobalContext
                   val hintFuture = Future {
                     provideHints(ex, bnfGrammar.get)(opctx)
                   }
@@ -448,7 +442,7 @@ class WebSession(remoteIP: String) extends Actor {
         "<li>Every step should be obtainable from the previous step by replacing the leftmost nonterminal by one of its productions</li>" +
         "<li>The last step of the derivation should be the string that has to be derived</li></ul>"
 
-    case GrammarEx | CNFEx | GNFEx =>
+    case GrammarEx | CNFEx | GNFEx | ProgLangEx =>
       "<ul>Every line of the input should be a valid production in extended Backus-Naur form" +
         "<li> A production is of the form &lt;Nonterminal&gt; ::= &lt;Rightside&gt; (you can also use -> instead of ::= )</li>" +
         "<li>The left side of the first production is considered as the start symbol</li>" +
@@ -483,9 +477,13 @@ class WebSession(remoteIP: String) extends Actor {
       var tries = 0
       wordForDerivation = None
       while (!wordForDerivation.isDefined && tries < maxTries) {
-        val randLen = minWordLength + (new java.util.Random()).nextInt(maxWordLength - minWordLength)
-        val opctx = getOperationContext
-        val gen = (new SizeBasedRandomAccessGenerator(studg, maxWordLength)(opctx)).getSamplingEnumerator(studg.start, randLen, 1)
+        val randLen = minWordLength + (new java.util.Random()).nextInt(maxWordLength - minWordLength)        
+        //create operation contexts
+        val gctx = getGlobalContext
+        val ectx = new EnumerationContext()  
+        //create a generator
+        val gen = (new SizeBasedRandomAccessGenerator(
+            studg, maxWordLength)(gctx,ectx)).getSamplingEnumerator(studg.start, randLen, 1)
         if (gen.hasNext) {          
           wordForDerivation = Some(gen.next)
         }
@@ -524,7 +522,7 @@ class WebSession(remoteIP: String) extends Actor {
         val word = gentry.word.get
         //println("Word to parse: " + word)
         val parseWord = word.map(_.asInstanceOf[Terminal])
-        val (_, cykTable) = (new CYKParser(g)).parseBottomUpWithTable(parseWord)(getOperationContext)
+        val (_, cykTable) = (new CYKParser(g)).parseBottomUpWithTable(parseWord)(getGlobalContext)
         //print every entry of the CYK table      
         val N = cykTable.length
         var str = ""
@@ -542,7 +540,7 @@ class WebSession(remoteIP: String) extends Actor {
    * if more operation has to be performed
    */
   def checkSolution(gentry: GrammarEntry, extype: ExType, userAnswer: String)
-  	(implicit opctx: OperationContext): OpRes = {
+  	(implicit gctx: GlobalContext): OpRes = {
     extype match {
       case GrammarEx =>
         //here, we expect the user answer to be a grammar in EBNF form
@@ -615,7 +613,8 @@ class WebSession(remoteIP: String) extends Actor {
       }
   }
 
-  def checkCNFSolution(gentry: GrammarEntry, studentGrammar: BNFGrammar)(implicit opctx: OperationContext): OpRes = {
+  def checkCNFSolution(gentry: GrammarEntry, studentGrammar: BNFGrammar)
+  	(implicit opctx: GlobalContext): OpRes = {
     if (BNFConverter.usesRegOp(studentGrammar)) {
       Last("The grammar is in EBNF form. You cannot use *,+,? in CNF form")
     } else {
@@ -630,7 +629,8 @@ class WebSession(remoteIP: String) extends Actor {
     }
   }
 
-  def checkGNFSolution(gentry: GrammarEntry, studentGrammar: BNFGrammar)(implicit opctx: OperationContext): OpRes = {
+  def checkGNFSolution(gentry: GrammarEntry, studentGrammar: BNFGrammar)
+  	(implicit opctx: GlobalContext): OpRes = {
     if (BNFConverter.usesRegOp(studentGrammar)) {
       Last("The grammar is in EBNF form. You cannot use *,+,? in GNF form")
     } else {
@@ -674,8 +674,13 @@ class WebSession(remoteIP: String) extends Actor {
   }
 
   import AmbiguityChecker._
-  def checkAmbiguity(studentGrammar: BNFGrammar)(implicit opctx: OperationContext): String = {
+  def checkAmbiguity(studentGrammar: BNFGrammar)
+  	(implicit opctx: GlobalContext): String = {
     val g = studentGrammar.cfGrammar
+    
+    implicit val ambctx = new AmbiguityContext(maxSize = 50, //note there is not parsing here 
+        consecWordsForAmbiguityCheck = 300)
+    implicit val ectx = new EnumerationContext()
     val ambChecker = new AmbiguityChecker(g) 
     ambChecker.checkAmbiguityInStudentGrammar() match {
       case List() =>
@@ -687,7 +692,8 @@ class WebSession(remoteIP: String) extends Actor {
     }
   }
 
-  def checkGrammarSolution(gentry: GrammarEntry, studentGrammar: BNFGrammar)(implicit opctx: OperationContext): OpRes = {
+  def checkGrammarSolution(gentry: GrammarEntry, studentGrammar: BNFGrammar)
+  	(implicit opctx: GlobalContext): OpRes = {
 
     //check if the exercise requires the grammar to be in LL1
     val ll1feedback = if (gentry.isLL1Entry) {
@@ -706,8 +712,16 @@ class WebSession(remoteIP: String) extends Actor {
 
   }
 
-  def checkEquivalence(ref: Grammar, g: Grammar)(implicit opctx: OperationContext): OpRes = {
+  def checkEquivalence(ref: Grammar, g: Grammar)
+  	(implicit opctx: GlobalContext): OpRes = {
 
+    implicit val ectx = new EnumerationContext()
+    implicit val eqctx = new EquivalenceCheckingContext(nOfTestcases = 100,
+        startSize = 1, maxSize = 11, timeOut = 10 * 1000) //10s
+    implicit val verictx = new EquivalenceVerificationContext(verificationTimeout = 10,
+        testsForVerification = 100, maxSizeForVerification = 11)     
+    implicit val pctx = new ParseContext()
+ 
     def proveEquivalence(g1: Grammar, g2: Grammar): Boolean = {
       val verifier = new EquivalenceVerifier(g1, g2)
       verifier.proveEquivalence() match {
@@ -719,6 +733,7 @@ class WebSession(remoteIP: String) extends Actor {
     if (g.cnfGrammar.rules.isEmpty) {
       Last("The grammar accepts/produces no strings! Check if all rules are reachable and productive !")
     } else {      
+      
       (new StudentGrammarEquivalenceChecker(ref)).isEquivalentTo(g) match {
         case List() => {
           //print a temporary status message here here, iff this has not been aborted          
@@ -743,25 +758,27 @@ class WebSession(remoteIP: String) extends Actor {
    * For now not proving equivalence here
    */
    def checkProgLangSolution(gentry: GrammarEntry, studentGrammar: BNFGrammar)
-   	(implicit opctx: OperationContext): OpRes = {
+   	(implicit opctx: GlobalContext): OpRes = {
     
+     val bindir = Play.getFile("/public/resources/").getAbsolutePath() + "/bin"
+    implicit val ectx = new EnumerationContext(maxIndexSizeForGeneration = 22) //restrict the index size
+    implicit val eqctx = new EquivalenceCheckingContext(nOfTestcases = 100000, 
+        startSize = 1, maxSize = 50, timeOut = 900 * 1000) //15m         
+    implicit val pctx = new ParseContext(antlrCompilationDir = bindir)
+     
     val ref = gentry.refGrammar
     val g = studentGrammar.cfGrammar
     
     if (g.cnfGrammar.rules.isEmpty) {
       Last("The grammar accepts/produces no strings! "+
           "Check if all rules are reachable and productive !")
-    } else {      
-      (new StudentGrammarEquivalenceChecker(ref)).isEquivalentTo(g) match {
-        case List() => {
-          //print a temporary status message here here, iff this has not been aborted          
-          Partial("All testcases passed.\nProving equivalence ... ",
-            Future {
-              Last(if (proveEquivalence(ref, g))
-                "Correct."
-              else
-                "Possibly correct but unable to prove correctness.")
-            })
+    } else {
+      val res = new SamplingBasedEquivalenceChecker(ref).isEquivalentTo(g)
+      //cleanup
+      (new java.io.File(bindir)).listFiles().foreach(_.delete())
+      res match {
+        case List() => {          
+          Last("Hurry! No counter-examples found!")
         }        
         case NotEquivalentNotAcceptedBySolution(ex) :: _ =>
           Last("The grammar does not accept the string: " + wordToString(ex))
@@ -770,16 +787,17 @@ class WebSession(remoteIP: String) extends Actor {
           Last("The grammar generates the invalid string: " + wordToString(ex))
       }
     }
-
-    checkEquivalence() match {
-      case Last(resstr) =>
-        Last(ll1feedback + resstr)
-      case Partial(resstr, nextPart) => Partial(ll1feedback + resstr, nextPart)
-    }
   }
 
-  def provideHints(ex: GrammarEntry, studentGrammar: BNFGrammar)(implicit opctx: OperationContext): OpRes = {
+  def provideHints(ex: GrammarEntry, studentGrammar: BNFGrammar)
+  	(implicit opctx: GlobalContext): OpRes = {
 
+    implicit val ectx = new EnumerationContext()
+    implicit val eqctx = new EquivalenceCheckingContext(nOfTestcases = 100,
+        startSize = 1, maxSize = 11, timeOut = 10 * 1000) //10s
+    implicit val repairctx = new RepairContext(enableExpensiveRepair = true, 
+        nCorrectWordsForRepair = 100)
+    implicit val pctx = new ParseContext()
     val maxHintsSize = 5
 
     def prettyPrintFeedbacks(inG: Grammar, resG: Grammar, w: Word, feedbacks: List[GrammarFeedback]) = {
@@ -846,23 +864,18 @@ class WebSession(remoteIP: String) extends Actor {
         if (cnfG.rules.isEmpty) {
           "The grammar is empty. Not all rules are produtive and reachable."
         } else {
-          val equivChecker = new EquivalenceChecker(ex.cnfRef)
+          val equivChecker = new StudentGrammarEquivalenceChecker(ex.cnfRef)
           val repairer = new Repairer(equivChecker)
           equivChecker.isEquivalentTo(cnfG) match {
-            case equivResult @ PossiblyEquivalent =>
-              "The grammar is probably correct. Try checking this grammar."
-            case InadequateTestcases =>
-              "Cannot generate enough testcases to perform repair.\n" +
-                "Make the grammar less ambiguous and try again!"
-            case equivResult @ NotEquivalentNotAcceptedBySolution(ex) =>
-              val (resG, feedbacks) = repairer.hint(cnfG, equivResult)
+            case List() =>
+              "The grammar is probably correct. Try checking this grammar."           
+            case (res@NotEquivalentNotAcceptedBySolution(ex)) :: _ =>
+              val (resG, feedbacks) = repairer.hint(cnfG, res)
               prettyPrintFeedbacks(plainGrammar, resG, ex, feedbacks)
 
-            case equivResult @ NotEquivalentGeneratedBySolution(ex) =>
-              val (resG, feedbacks) = repairer.hint(cnfG, equivResult)
-              prettyPrintFeedbacks(plainGrammar, resG, ex, feedbacks)
-            case Aborted =>
-              "Aborted"
+            case (res@NotEquivalentGeneratedBySolution(ex)) :: _ =>
+              val (resG, feedbacks) = repairer.hint(cnfG, res)
+              prettyPrintFeedbacks(plainGrammar, resG, ex, feedbacks)           
           }
         }
       }
