@@ -12,3 +12,6 @@ libraryDependencies ++= Seq(
   cache,
   ws
 )
+
+unmanagedClasspath in Runtime += baseDirectory.value / "public/resources/bin"
+

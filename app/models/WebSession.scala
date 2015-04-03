@@ -25,12 +25,13 @@ import play.Logger
 import java.util.Calendar
 import java.io.File
 import grammar._
+import java.io.FileNotFoundException
 ///import grammar.CNFConverter
 
 object grammarDB {
   val db = GrammarDatabase.readGrammarDatabase(
-      Play.getFile("/public/resources/GrammarDatabase.xml"),
-      Play.getFile("/public/resources/").getAbsolutePath())
+    Play.getFile("/public/resources/GrammarDatabase.xml"),
+    Play.getFile("/public/resources/").getAbsolutePath())
 }
 
 object Guid {
@@ -94,8 +95,7 @@ class WebSession(remoteIP: String) extends Actor {
 
   //a list operation futures
   var currentOp: Option[(Future[OpRes], GlobalContext)] = None
-  def recordFuture(opfuture: Future[OpRes], opctx: GlobalContext, extype: Option[ExerciseType.ExType])
-  	(implicit msgid: Long) {
+  def recordFuture(opfuture: Future[OpRes], opctx: GlobalContext, extype: Option[ExerciseType.ExType])(implicit msgid: Long) {
 
     currentOp = Some((opfuture, opctx))
     //register a call-back
@@ -145,8 +145,8 @@ class WebSession(remoteIP: String) extends Actor {
 
   //keep track of the mode 
   var adminMode = false
-  
-  def getGlobalContext = new GlobalContext()   
+
+  def getGlobalContext = new GlobalContext()
 
   def receive = {
     case Init =>
@@ -236,14 +236,14 @@ class WebSession(remoteIP: String) extends Actor {
                 val extype = ExerciseType.getExType(exid)
                 //clientLog("Exercise ID: "+exid+" grammar: "+gentry.reference)
                 if (extype.isDefined) {
-                  val (stmt, initialGrammar) = generateProblemStatement(gentry, extype.get)                  
-                  val data = Map("desc" -> toJson(stmt))                  
+                  val (stmt, initialGrammar) = generateProblemStatement(gentry, extype.get)
+                  val data = Map("desc" -> toJson(stmt))
                   event("exerciseDesc", data)
                   //some problems have an initial answer that the users have to refine 
-                  if(initialGrammar.isDefined){
+                  if (initialGrammar.isDefined) {
                     val data = Map("grammar" -> toJson(initialGrammar.get.toString))
-                    event("replace_grammar", data)	
-                  }                  
+                    event("replace_grammar", data)
+                  }
                 } else
                   //log error message
                   clientLog("Exercise with id: " + exid + " does not exist")
@@ -305,7 +305,7 @@ class WebSession(remoteIP: String) extends Actor {
               clientLog("Parse Error:" + errstr)
             else {
               //convert the grammar to cnf form and then reconvert              
-              val normalGrammar = CFGrammar.prettyPrint(bnfGrammar.get.cfGrammar.fromCNF) 
+              val normalGrammar = CFGrammar.prettyPrint(bnfGrammar.get.cfGrammar.fromCNF)
               val data = Map("grammar" -> toJson(normalGrammar.toString))
               event("replace_grammar", data)
             }
@@ -408,9 +408,9 @@ class WebSession(remoteIP: String) extends Actor {
 
   //minimum length of the word that has to be derived
   val minWordLength = 5
-  val maxWordLength = 10  
+  val maxWordLength = 10
   val maxTries = 10
-  
+
   //TODO: this is not thread safe, make this thread safe by extracting the string from
   //the problem statement
   var wordForDerivation: Option[Word] = None
@@ -454,12 +454,12 @@ class WebSession(remoteIP: String) extends Actor {
         "<li> &lt;Rightside&gt; is a regular expression over terminals and nonterminals that uses | for disjunction, " +
         "* for closure, white-space for concatenation, parenthesis ( ) for grouping, + for closure without empty string, " +
         " and ? for option (disjunction with empty string)</li></ul>"
-        
-    case CYKEx => 
+
+    case CYKEx =>
       "TODO"
   }
 
-  def generateProblemStatement(gentry: GrammarEntry, extype: ExType) : (String, Option[BNFGrammar]) = extype match {
+  def generateProblemStatement(gentry: GrammarEntry, extype: ExType): (String, Option[BNFGrammar]) = extype match {
     case GrammarEx if gentry.isLL1Entry =>
       ("Provide an LL(1) grammar for " + gentry.desc, None)
     case GrammarEx =>
@@ -472,19 +472,19 @@ class WebSession(remoteIP: String) extends Actor {
         gentry.reference.toHTMLString, None)
     case DerivationEx =>
       //generate a word for derivations      
-      val studg = gentry.refGrammar.fromCNF      
+      val studg = gentry.refGrammar.fromCNF
       //select a random length and select a word of that length at random, until a word is found
       var tries = 0
       wordForDerivation = None
       while (!wordForDerivation.isDefined && tries < maxTries) {
-        val randLen = minWordLength + (new java.util.Random()).nextInt(maxWordLength - minWordLength)        
+        val randLen = minWordLength + (new java.util.Random()).nextInt(maxWordLength - minWordLength)
         //create operation contexts
         val gctx = getGlobalContext
-        val ectx = new EnumerationContext()  
+        val ectx = new EnumerationContext()
         //create a generator
         val gen = (new SizeBasedRandomAccessGenerator(
-            studg, maxWordLength)(gctx,ectx)).getSamplingEnumerator(studg.start, randLen, 1)
-        if (gen.hasNext) {          
+          studg, maxWordLength)(gctx, ectx)).getSamplingEnumerator(studg.start, randLen, 1)
+        if (gen.hasNext) {
           wordForDerivation = Some(gen.next)
         }
         tries += 1
@@ -496,16 +496,16 @@ class WebSession(remoteIP: String) extends Actor {
         case _ =>
           ("Cannot generate a word for the grammar of size: " + minWordLength, None)
       }
-    case CYKEx => 
-      (s"""Show the CYK parse table for the word "${wordToString(gentry.word.get)}" of the grammar """ + 
-      	renameAutoSymbols(gentry.cnfRef).toHTMLString, None)
+    case CYKEx =>
+      (s"""Show the CYK parse table for the word "${wordToString(gentry.word.get)}" of the grammar """ +
+        renameAutoSymbols(gentry.cnfRef).toHTMLString, None)
     case ProgLangEx =>
-      val stmt = s"""Refine the grammar for ${gentry.desc} shown in the editor"""+ 
-      " so that it does not accept syntactically incorrect"+
-      	" programs by eliminating the counter-examples."
+      val stmt = s"""Refine the grammar for ${gentry.desc} shown in the editor""" +
+        " so that it does not accept syntactically incorrect" +
+        " programs by eliminating the counter-examples."
       val initGrammar = gentry.initGrammar
-      if(!initGrammar.isDefined)
-        throw new IllegalStateException("Initial grammar is not defined for problem: "+gentry.id)
+      if (!initGrammar.isDefined)
+        throw new IllegalStateException("Initial grammar is not defined for problem: " + gentry.id)
       (stmt, initGrammar)
   }
 
@@ -539,8 +539,7 @@ class WebSession(remoteIP: String) extends Actor {
    * Returns a string (which could be a temporary result) and also continuation
    * if more operation has to be performed
    */
-  def checkSolution(gentry: GrammarEntry, extype: ExType, userAnswer: String)
-  	(implicit gctx: GlobalContext): OpRes = {
+  def checkSolution(gentry: GrammarEntry, extype: ExType, userAnswer: String)(implicit gctx: GlobalContext): OpRes = {
     extype match {
       case GrammarEx =>
         //here, we expect the user answer to be a grammar in EBNF form
@@ -579,11 +578,11 @@ class WebSession(remoteIP: String) extends Actor {
           Last("Parse Error:" + errstr)
         else
           checkGNFSolution(gentry, bnfGrammar.get)
-          
+
       case CYKEx =>
         Last("Operation not yet supported")
-      
-      case ProgLangEx => 
+
+      case ProgLangEx =>
         //here, we expect the user answer to be a grammar in EBNF form
         val rules = userAnswer.split("\n").toList
         //try to parse the grammar (syntax errors will be displayed in the console)
@@ -613,12 +612,11 @@ class WebSession(remoteIP: String) extends Actor {
       }
   }
 
-  def checkCNFSolution(gentry: GrammarEntry, studentGrammar: BNFGrammar)
-  	(implicit opctx: GlobalContext): OpRes = {
+  def checkCNFSolution(gentry: GrammarEntry, studentGrammar: BNFGrammar)(implicit opctx: GlobalContext): OpRes = {
     if (BNFConverter.usesRegOp(studentGrammar)) {
       Last("The grammar is in EBNF form. You cannot use *,+,? in CNF form")
     } else {
-      val g = studentGrammar.cfGrammar 
+      val g = studentGrammar.cfGrammar
       CFGrammar.getRuleNotInCNF(g, false) match {
         case None =>
           Partial("The grammar staisfies CNF properties.\nchecking for equivalence...",
@@ -629,12 +627,11 @@ class WebSession(remoteIP: String) extends Actor {
     }
   }
 
-  def checkGNFSolution(gentry: GrammarEntry, studentGrammar: BNFGrammar)
-  	(implicit opctx: GlobalContext): OpRes = {
+  def checkGNFSolution(gentry: GrammarEntry, studentGrammar: BNFGrammar)(implicit opctx: GlobalContext): OpRes = {
     if (BNFConverter.usesRegOp(studentGrammar)) {
       Last("The grammar is in EBNF form. You cannot use *,+,? in GNF form")
     } else {
-      val g = studentGrammar.cfGrammar 
+      val g = studentGrammar.cfGrammar
       CFGrammar.getRuleNotInGNF(g) match {
         case None =>
           Partial("The grammar staisfies GNF properties.\nchecking for equivalence...",
@@ -674,26 +671,24 @@ class WebSession(remoteIP: String) extends Actor {
   }
 
   import AmbiguityChecker._
-  def checkAmbiguity(studentGrammar: BNFGrammar)
-  	(implicit opctx: GlobalContext): String = {
+  def checkAmbiguity(studentGrammar: BNFGrammar)(implicit opctx: GlobalContext): String = {
     val g = studentGrammar.cfGrammar
-    
+
     implicit val ambctx = new AmbiguityContext(maxSize = 50, //note there is not parsing here 
-        consecWordsForAmbiguityCheck = 300)
+      consecWordsForAmbiguityCheck = 300)
     implicit val ectx = new EnumerationContext()
-    val ambChecker = new AmbiguityChecker(g) 
+    val ambChecker = new AmbiguityChecker(g)
     ambChecker.checkAmbiguityInStudentGrammar() match {
       case List() =>
         "The grammar is possibly unambiguous."
-        //"The grammar is unambiguous."
+      //"The grammar is unambiguous."
       case AmbiguityWitness(ant, w) :: _ =>
-        s"Nonterminal $ant is ambiguous "+
-        s"- there are at least two parse trees for ${wordToString(w)}" 
+        s"Nonterminal $ant is ambiguous " +
+          s"- there are at least two parse trees for ${wordToString(w)}"
     }
   }
 
-  def checkGrammarSolution(gentry: GrammarEntry, studentGrammar: BNFGrammar)
-  	(implicit opctx: GlobalContext): OpRes = {
+  def checkGrammarSolution(gentry: GrammarEntry, studentGrammar: BNFGrammar)(implicit opctx: GlobalContext): OpRes = {
 
     //check if the exercise requires the grammar to be in LL1
     val ll1feedback = if (gentry.isLL1Entry) {
@@ -712,16 +707,15 @@ class WebSession(remoteIP: String) extends Actor {
 
   }
 
-  def checkEquivalence(ref: Grammar, g: Grammar)
-  	(implicit opctx: GlobalContext): OpRes = {
+  def checkEquivalence(ref: Grammar, g: Grammar)(implicit opctx: GlobalContext): OpRes = {
 
     implicit val ectx = new EnumerationContext()
     implicit val eqctx = new EquivalenceCheckingContext(nOfTestcases = 100,
-        startSize = 1, maxSize = 11, timeOut = 10 * 1000) //10s
+      startSize = 1, maxSize = 11, timeOut = 10 * 1000) //10s
     implicit val verictx = new EquivalenceVerificationContext(verificationTimeout = 10,
-        testsForVerification = 100, maxSizeForVerification = 11)     
+      testsForVerification = 100, maxSizeForVerification = 11)
     implicit val pctx = new ParseContext()
- 
+
     def proveEquivalence(g1: Grammar, g2: Grammar): Boolean = {
       val verifier = new EquivalenceVerifier(g1, g2)
       verifier.proveEquivalence() match {
@@ -729,11 +723,11 @@ class WebSession(remoteIP: String) extends Actor {
         case _ => false
       }
     }
-    
+
     if (g.cnfGrammar.rules.isEmpty) {
       Last("The grammar accepts/produces no strings! Check if all rules are reachable and productive !")
-    } else {      
-      
+    } else {
+
       (new StudentGrammarEquivalenceChecker(ref)).isEquivalentTo(g) match {
         case List() => {
           //print a temporary status message here here, iff this has not been aborted          
@@ -744,7 +738,7 @@ class WebSession(remoteIP: String) extends Actor {
               else
                 "Possibly correct but unable to prove correctness.")
             })
-        }        
+        }
         case NotEquivalentNotAcceptedBySolution(ex) :: _ =>
           Last("The grammar does not accept the string: " + wordToString(ex))
 
@@ -753,33 +747,41 @@ class WebSession(remoteIP: String) extends Actor {
       }
     }
   }
-  
+
   /**
    * For now not proving equivalence here
    */
-   def checkProgLangSolution(gentry: GrammarEntry, studentGrammar: BNFGrammar)
-   	(implicit opctx: GlobalContext): OpRes = {
-    
-     val bindir = Play.getFile("/public/resources/").getAbsolutePath() + "/bin"
+  def checkProgLangSolution(gentry: GrammarEntry, studentGrammar: BNFGrammar)(implicit opctx: GlobalContext): OpRes = {
+
+    val bindir = Play.getFile("/public/resources/").getAbsolutePath() + "/bin"
     implicit val ectx = new EnumerationContext(maxIndexSizeForGeneration = 22) //restrict the index size
-    implicit val eqctx = new EquivalenceCheckingContext(nOfTestcases = 100000, 
-        startSize = 1, maxSize = 50, timeOut = 900 * 1000) //15m         
-    implicit val pctx = new ParseContext(antlrCompilationDir = bindir)
-     
+    implicit val eqctx = new EquivalenceCheckingContext(nOfTestcases = 100000,
+      startSize = 1, maxSize = 50, timeOut = 900 * 1000) //15m         
+    implicit val pctx = new ParseContext(antlrCompilationDir = bindir,
+      antlrJarPath = Play.getFile("/lib/antlr-4.5-complete.jar").getAbsolutePath())
+
     val ref = gentry.refGrammar
     val g = studentGrammar.cfGrammar
-    
+
     if (g.cnfGrammar.rules.isEmpty) {
-      Last("The grammar accepts/produces no strings! "+
-          "Check if all rules are reachable and productive !")
+      Last("The grammar accepts/produces no strings! " +
+        "Check if all rules are reachable and productive !")
     } else {
-      val res = new SamplingBasedEquivalenceChecker(ref).isEquivalentTo(g)
-      //cleanup
-      (new java.io.File(bindir)).listFiles().foreach(_.delete())
+      val res = try {
+        new SamplingBasedEquivalenceChecker(ref).isEquivalentTo(g)
+      } finally {
+        //cleanup        
+        (new java.io.File(bindir)).listFiles().filter(
+          _.exists()).foreach { fl =>
+            try { fl.delete() }
+            catch { case e: FileNotFoundException => ; }
+          }
+      }
+      //return result
       res match {
-        case List() => {          
+        case List() => {
           Last("Hurry! No counter-examples found!")
-        }        
+        }
         case NotEquivalentNotAcceptedBySolution(ex) :: _ =>
           Last("The grammar does not accept the string: " + wordToString(ex))
 
@@ -789,14 +791,13 @@ class WebSession(remoteIP: String) extends Actor {
     }
   }
 
-  def provideHints(ex: GrammarEntry, studentGrammar: BNFGrammar)
-  	(implicit opctx: GlobalContext): OpRes = {
+  def provideHints(ex: GrammarEntry, studentGrammar: BNFGrammar)(implicit opctx: GlobalContext): OpRes = {
 
     implicit val ectx = new EnumerationContext()
     implicit val eqctx = new EquivalenceCheckingContext(nOfTestcases = 100,
-        startSize = 1, maxSize = 11, timeOut = 10 * 1000) //10s
-    implicit val repairctx = new RepairContext(enableExpensiveRepair = true, 
-        nCorrectWordsForRepair = 100)
+      startSize = 1, maxSize = 11, timeOut = 10 * 1000) //10s
+    implicit val repairctx = new RepairContext(enableExpensiveRepair = true,
+      nCorrectWordsForRepair = 100)
     implicit val pctx = new ParseContext()
     val maxHintsSize = 5
 
@@ -868,14 +869,14 @@ class WebSession(remoteIP: String) extends Actor {
           val repairer = new Repairer(equivChecker)
           equivChecker.isEquivalentTo(cnfG) match {
             case List() =>
-              "The grammar is probably correct. Try checking this grammar."           
-            case (res@NotEquivalentNotAcceptedBySolution(ex)) :: _ =>
+              "The grammar is probably correct. Try checking this grammar."
+            case (res @ NotEquivalentNotAcceptedBySolution(ex)) :: _ =>
               val (resG, feedbacks) = repairer.hint(cnfG, res)
               prettyPrintFeedbacks(plainGrammar, resG, ex, feedbacks)
 
-            case (res@NotEquivalentGeneratedBySolution(ex)) :: _ =>
+            case (res @ NotEquivalentGeneratedBySolution(ex)) :: _ =>
               val (resG, feedbacks) = repairer.hint(cnfG, res)
-              prettyPrintFeedbacks(plainGrammar, resG, ex, feedbacks)           
+              prettyPrintFeedbacks(plainGrammar, resG, ex, feedbacks)
           }
         }
       }
