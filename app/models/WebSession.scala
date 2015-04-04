@@ -512,7 +512,7 @@ class WebSession(remoteIP: String) extends Actor {
   def getSolution(gentry: GrammarEntry, extype: ExType, userAnswer: String): Option[String] = extype match {
     case GrammarEx | CNFEx | GNFEx | DerivationEx | ProgLangEx =>
       Some("Operation not supported!")
-    case CYKEx =>
+    case CYKEx => 
       val rules = userAnswer.split("\n").toList
       val (bnfGrammar, errstr) = (new GrammarParser()).parseGrammar(rules)
       if (!bnfGrammar.isDefined)
@@ -712,7 +712,7 @@ class WebSession(remoteIP: String) extends Actor {
     implicit val ectx = new EnumerationContext()
     implicit val eqctx = new EquivalenceCheckingContext(nOfTestcases = 100,
       startSize = 1, maxSize = 11, timeOut = 10 * 1000) //10s
-    implicit val verictx = new EquivalenceVerificationContext(verificationTimeout = 10,
+    implicit val verictx = new EquivalenceVerificationContext(verificationTimeout = 20,
       testsForVerification = 100, maxSizeForVerification = 11)
     implicit val pctx = new ParseContext()
 

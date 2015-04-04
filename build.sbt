@@ -15,3 +15,11 @@ libraryDependencies ++= Seq(
 
 unmanagedClasspath in Runtime += baseDirectory.value / "public/resources/bin"
 
+fork in run := true
+
+javaOptions += "-Xmx30G"
+
+javaOptions += "-Xss20m"
+
+javaOptions += "-Xms5G"
+
