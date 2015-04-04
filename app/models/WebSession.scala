@@ -756,7 +756,7 @@ class WebSession(remoteIP: String) extends Actor {
     val bindir = Play.getFile("/public/resources/").getAbsolutePath() + "/bin"
     implicit val ectx = new EnumerationContext(maxIndexSizeForGeneration = 22) //restrict the index size
     implicit val eqctx = new EquivalenceCheckingContext(nOfTestcases = 100000,
-      startSize = 1, maxSize = 50, timeOut = 900 * 1000) //15m         
+      startSize = 1, maxSize = 15, timeOut = 300 * 1000) //5m         
     implicit val pctx = new ParseContext(antlrCompilationDir = bindir,
       antlrJarPath = Play.getFile("/lib/antlr-4.5-complete.jar").getAbsolutePath())
 
@@ -768,7 +768,7 @@ class WebSession(remoteIP: String) extends Actor {
         "Check if all rules are reachable and productive !")
     } else {
       val res = try {
-        new SamplingBasedEquivalenceChecker(ref).isEquivalentTo(g)
+        new SamplingBasedEquivalenceChecker(ref).isSubset(g)
       } finally {
         //cleanup        
         (new java.io.File(bindir)).listFiles().filter(
@@ -780,12 +780,9 @@ class WebSession(remoteIP: String) extends Actor {
       //return result
       res match {
         case List() => {
-          Last("Hurry! No counter-examples found!")
+          Last("Hurray! No counter-examples found!")
         }
-        case NotEquivalentNotAcceptedBySolution(ex) :: _ =>
-          Last("The grammar does not accept the string: " + wordToString(ex))
-
-        case NotEquivalentGeneratedBySolution(ex) :: _ =>
+        case ex :: _ =>
           Last("The grammar generates the invalid string: " + wordToString(ex))
       }
     }
