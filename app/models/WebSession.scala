@@ -461,9 +461,9 @@ class WebSession(remoteIP: String) extends Actor {
 
   def generateProblemStatement(gentry: GrammarEntry, extype: ExType): (String, Option[BNFGrammar]) = extype match {
     case GrammarEx if gentry.isLL1Entry =>
-      ("Provide an LL(1) grammar for " + gentry.desc, None)
+      ("Provide an LL(1) grammar for " + gentry.desc, gentry.initGrammar)
     case GrammarEx =>
-      ("Provide a grammar for " + gentry.desc, None)
+      ("Provide a grammar for " + gentry.desc, gentry.initGrammar)
     case CNFEx =>
       ("Convert the following grammar to Chomsky normal form " +
         gentry.reference.toHTMLString, None)
