@@ -14,3 +14,7 @@ dist
 /RUNNING_PID
 /.settings
 /bin
+/lib
+/cfgchecker.log
+/public/resources
+/tequila-java-client-2.0.2
