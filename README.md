@@ -13,8 +13,16 @@ From the repository `CFG-Checking`, run the following commands to ensure that yo
 
 Inside the folder `grammar-web`, run the following command:
 
-`sbt run`
+`sbt runServer`
 
 and connect in your browser to
 
 `localhost:9000`
+
+### Modifying the source of the javascript
+
+If you plan to work on the javascript source, run inside another shell:
+
+`sbt ~fastOptJS`
+
+This will ensure that sources are recompiled each time.
