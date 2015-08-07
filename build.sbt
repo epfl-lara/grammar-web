@@ -23,9 +23,13 @@ javaOptions += "-Xss20m"
 
 javaOptions += "-Xms5G"
 
-lazy val js = (project in file("js")).enablePlugins(ScalaJSPlugin)
+lazy val js = (project in file("js")).enablePlugins(ScalaJSPlugin).settings(
+  libraryDependencies += "org.scala-js" %%% "scalajs-dom" % "0.8.0",
+  libraryDependencies += "be.doeraene" %%% "scalajs-jquery" % "0.8.0"
+)
 
 scalaVersion in js := "2.11.1"
+
 
 lazy val copyjs = TaskKey[Unit]("copyjs", "Copy javascript files to target directory")
 
@@ -37,3 +41,4 @@ copyjs := {
 }
 
 addCommandAlias("runServer", ";fastOptJS;copyjs;run")
+addCommandAlias("fastOptCopy", ";fastOptJS;copyjs")
