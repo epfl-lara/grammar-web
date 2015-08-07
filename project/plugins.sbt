@@ -1,5 +1,7 @@
 resolvers += "Typesafe repository" at "http://repo.typesafe.com/typesafe/releases/"
 
+resolvers += "amateras-repo" at "http://amateras.sourceforge.jp/mvn-snapshot/"
+
 // The Play plugin
 addSbtPlugin("com.typesafe.play" % "sbt-plugin" % "2.3.2")
 

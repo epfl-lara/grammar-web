@@ -5,7 +5,7 @@ import scala.scalajs.js.annotation.JSName
 import scala.scalajs.js.{JSON, JSApp}
 import org.scalajs.dom
 import org.scalajs.jquery.{jQuery => $, JQueryAjaxSettings, JQueryXHR, JQuery, JQueryEventObject}
-//import com.scalawarrior.scalajs.ace._
+import com.scalawarrior.scalajs.ace._
 import js.Dynamic.{global => g, literal => l}
 import org.scalajs.dom._
 
@@ -150,9 +150,9 @@ object GrammarApp extends JSApp {
 
 
     var timeWindow = 2000
-    var backwardChanges = js.Array[js.Dynamic]()
-    var forwardChanges = js.Array[js.Dynamic]()
-    var oldCode: js.Dynamic = null
+    var backwardChanges = js.Array[String]()
+    var forwardChanges = js.Array[String]()
+    var oldCode = ""
 
     var connected = false
     var handlers = js.Dictionary.empty[HandlerDataArgument => Unit]
@@ -168,7 +168,7 @@ object GrammarApp extends JSApp {
     var lastReconnectDelay = 0
     var reconnectIn = 0
 
-    def save(currentCode: js.Dynamic) {
+    def save(currentCode: String) {
       if (oldCode != null && oldCode != currentCode) {
         if (forwardChanges.length == 0) {
           storeCurrent(oldCode)
@@ -242,8 +242,7 @@ object GrammarApp extends JSApp {
       updateUndoRedo()
     }
 
-    def storeCurrent(code: js.Dynamic) {
-      // TODO: Replace by string
+    def storeCurrent(code: String) {
       forwardChanges = js.Array()
       if (backwardChanges.length >= 1) {
         if (code != backwardChanges(backwardChanges.length - 1)) {
@@ -705,15 +704,14 @@ object GrammarApp extends JSApp {
         recompile()
       },
       readOnly = true
-    ))
+    ).asInstanceOf[EditorCommand])
 
     editor.commands.removeCommand("replace")
     editor.commands.removeCommand("transposeletters")
-
-    editorSession.on("change", (e: JQueryEventObject) => {
+    editorSession.on("change", (e: js.Any) => {
       lastChange = new js.Date().getTime()
       updateSaveButton()
-      js.timers.setTimeout(timeWindow + 50)(onCodeUpdate)
+      js.timers.setTimeout(timeWindow + 50)(onCodeUpdate).asInstanceOf[scala.Any]
     })
 
     def resizeEditor() {

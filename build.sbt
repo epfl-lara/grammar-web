@@ -26,7 +26,7 @@ javaOptions += "-Xms5G"
 lazy val js = (project in file("js")).enablePlugins(ScalaJSPlugin).settings(
   libraryDependencies += "org.scala-js" %%% "scalajs-dom" % "0.8.0",
   libraryDependencies += "be.doeraene" %%% "scalajs-jquery" % "0.8.0"
-)
+).dependsOn(aceJsProject)
 
 scalaVersion in js := "2.11.1"
 
@@ -42,3 +42,5 @@ copyjs := {
 
 addCommandAlias("runServer", ";fastOptJS;copyjs;run")
 addCommandAlias("fastOptCopy", ";fastOptJS;copyjs")
+
+lazy val aceJsProject = RootProject(uri("https://github.com/MikaelMayer/scalajs-ace.git"))
