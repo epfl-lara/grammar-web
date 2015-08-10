@@ -269,7 +269,7 @@ class WebSession(remoteIP: String) extends Actor {
                     val (initialOpt, error) = (new GrammarParser).parseGrammarContent((msg \ SAVE.initial).as[String])
                     initialOpt match {
                       case None => clientLog("The grammar cannot parse. " + error); g
-                      case Some(initial) =>  g.copy(initGrammar=Some(initial))
+                      case Some(initial) =>  g.copy(initGrammar=Some(initial)).setDirtyInitialFile()
                     }
                   case (g, SAVE.word) =>
                     val parseWord = (msg \ SAVE.word).as[String]
@@ -281,6 +281,7 @@ class WebSession(remoteIP: String) extends Actor {
                   case (g, _) => g
                 }
                 grammarDB.db = grammarDB.db.updated(gentry.id)(_ => updated_gentry)
+                GrammarDatabase.writeGrammarDatabase(grammarDB.db)
                 clientLog("New description stored for this grammar")
             }
           case DO_CHECK =>
