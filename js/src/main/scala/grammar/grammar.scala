@@ -14,6 +14,7 @@ import japgolly.scalajs.react.vdom.all.{id, dangerouslySetInnerHtml}
 import japgolly.scalajs.react._
 
 trait HandlerDataArgument extends js.Any {
+  val reference: String = js.native
   var message: String = js.native
   var content: String = js.native
   var `type`: String = js.native
@@ -574,6 +575,22 @@ object GrammarApp extends JSApp {
       g.localStorage.setItem("editorCode", editor.getValue())
     }
 
+    def saveGrammar(e: ReactEventI): Unit = {
+      val exid = $("#exercise-select").find(":selected").value()
+      val pid = $("#example-loader").find(":selected").value()
+      val msg = JSON.stringify(l(
+        action = SAVE_EXERCISE,
+        desc = $("#desc-edit").text(),
+        exerciseId = exid,
+        problemId = pid
+      ))
+      leonSocket.send(msg)
+    }
+
+
+    var editorSession = editor.getSession()
+
+    /** Renders the description of the exercise, plus admin stuff if needed*/
     def renderDescription(data: HandlerDataArgument): Unit = {
       $("#desc").empty()
       var box_title = ReactComponentB[Unit]("Box title")
@@ -584,12 +601,21 @@ object GrammarApp extends JSApp {
           " Description:"
         ).render
         ).buildU
+      val openReferenceButton = ReactComponentB[HandlerDataArgument]("Open reference grammar button")
+      .render(data => <.input(^.`type` := "button", ^.value:="reference", ^.onClick --> {
+        g.console.log(data.reference)
+        replaceGrammar(data.reference)
+      }))
+      .build
+
       val exercise_description =
         ReactComponentB[HandlerDataArgument]("Exercise description")
           .render(data =>
           <.div(
             id := "desc-space",
             data.intro,
+            isAdminMode ?= <.input(^.`type` := "button", ^.value:="save", ^.onClick  ==> saveGrammar),
+            isAdminMode ?= openReferenceButton(data),
             <.span(
               id := "desc-desc",
               isAdminMode ?= (^.`class` := "admin-editable"),
@@ -687,14 +713,12 @@ object GrammarApp extends JSApp {
     def loadSelectedExample() {
       var exid = $("#exercise-select").find(":selected").value()
       var pid = $("#example-loader").find(":selected").value()
-      var msg = JSON.stringify(l(action = "loadExercise", exerciseId = exid, problemId = pid))
+      var msg = JSON.stringify(l(action = LOAD_EXERCISE, exerciseId = exid, problemId = pid))
       leonSocket.send(msg)
     }
 
     $("#exercise-select").change(loadProblems _)
     $("#example-loader").change(loadSelectedExample _)
-
-    var editorSession = editor.getSession()
 
     def loadExample(group: String, id: Int = 0): Unit = {
       if (id != 0) {
@@ -760,9 +784,13 @@ object GrammarApp extends JSApp {
 
     resizeEditor()
 
-    handlers(REPLACE_GRAMMAR) = (data: HandlerDataArgument) => {
+    def replaceGrammar(newGrammar: String) = {
       storeCurrent(editorSession.getValue())
-      editorSession.setValue(data.grammar)
+      editorSession.setValue(newGrammar)
+    }
+
+    handlers(REPLACE_GRAMMAR) = (data: HandlerDataArgument) => {
+      replaceGrammar(data.grammar)
     }
 
     var storedCode = g.localStorage.getItem("editorCode")

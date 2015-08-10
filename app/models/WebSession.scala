@@ -228,18 +228,31 @@ class WebSession(remoteIP: String) extends Actor {
                 //clientLog("Exercise ID: "+exid+" grammar: "+gentry.reference)
                 if (extype.isDefined) {
                   val (intro, desc, initialGrammar) = generateProblemStatement(gentry, extype.get)
-                  val data = Map(EXERCISE_DESC.intro -> toJson(intro), EXERCISE_DESC.desc -> toJson(desc))
+                  val data = Map(EXERCISE_DESC.intro -> toJson(intro), EXERCISE_DESC.desc -> toJson(desc)) ++
+                    (if (adminMode) Map(EXERCISE_DESC.reference -> toJson(gentry.refGrammar.toString)) else Map.empty[String, JsValue])
                   event(EXERCISE_DESC, data)
                   //some problems have an initial answer that the users have to refine 
                   if (initialGrammar.isDefined) {
-                    val data = Map("grammar" -> toJson(initialGrammar.get.toString))
+                    val data = Map(EXERCISE_DESC.grammar -> toJson(initialGrammar.get.toString))
                     event(REPLACE_GRAMMAR, data)
                   }
                 } else
-                  //log error message
+                //log error message
                   clientLog("Exercise with id: " + exid + " does not exist")
             }
-
+          case SAVE_EXERCISE =>
+            val pid = (msg \ "problemId").as[String].toInt
+            val data = grammarDB.db.grammarEntries.find(_.id == pid) match {
+              case None =>
+                Map("desc" -> toJson("There is no grammar to override in the database with the given id: " + pid))
+              case Some(gentry) =>
+                val exid = (msg \ "exerciseId").as[String].toInt
+                val extype = ExerciseType.getExType(exid)
+                val desc = msg \ EXERCISE_DESC.desc
+                if (extype.isDefined) {
+                  // TODO: Save the new grammar.
+                } else clientLog("Exercise with id: " + exid + " does not exist")
+            }
           case DO_CHECK =>
             val pid = (msg \ "problemId").as[String].toInt
             grammarDB.db.grammarEntries.find(_.id == pid) match {

@@ -25,6 +25,7 @@ object Shared {
   val GET_HINTS = "getHints"
   val GET_HELP = "getHelp"
   val SOLVE = "solve"
+  val SAVE_EXERCISE = "saveGrammar"
 
   /* Out-server events */
   val CONSOLE = "console"
@@ -38,6 +39,9 @@ object Shared {
     val string = "exerciseDesc"
     def intro = "intro"
     def desc = "desc"
+    def reference = "reference"
+    /** initial grammar */
+    val grammar = "grammar"
   }
 
   val ENTER_ADMIN_MODE = "EnterAdminMode"
