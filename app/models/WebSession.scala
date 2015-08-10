@@ -263,13 +263,13 @@ class WebSession(remoteIP: String) extends Actor {
                     val (referenceOpt, error) = (new GrammarParser).parseGrammarContent((msg \ SAVE.reference).as[String])
                     referenceOpt match {
                       case None => clientLog("The grammar cannot parse. " + error); g
-                      case Some(reference) =>  g.copy(reference = reference)
+                      case Some(reference) =>  g.copy(reference = reference).setToExportReference()
                     }
                   case (g, SAVE.initial) =>
                     val (initialOpt, error) = (new GrammarParser).parseGrammarContent((msg \ SAVE.initial).as[String])
                     initialOpt match {
                       case None => clientLog("The grammar cannot parse. " + error); g
-                      case Some(initial) =>  g.copy(initGrammar=Some(initial)).setDirtyInitialFile()
+                      case Some(initial) =>  g.copy(initGrammar=Some(initial)).setToExportInitGrammar()
                     }
                   case (g, SAVE.word) =>
                     val parseWord = (msg \ SAVE.word).as[String]
