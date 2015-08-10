@@ -32,6 +32,10 @@ div#title {
     overflow: hidden;
 }
 
+.admin-editable {
+    outline: 2px dashed blue
+}
+
 i {
     font-size: 14px;
 }

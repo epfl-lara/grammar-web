@@ -9,6 +9,9 @@ import dom.html.Element
 import com.scalawarrior.scalajs.ace._
 import js.Dynamic.{global => g, literal => l}
 import org.scalajs.dom._
+import japgolly.scalajs.react.vdom.prefix_<^._
+import japgolly.scalajs.react.vdom.all.{id, dangerouslySetInnerHtml}
+import japgolly.scalajs.react._
 
 trait HandlerDataArgument extends js.Any {
   var message: String = js.native
@@ -571,27 +574,66 @@ object GrammarApp extends JSApp {
       g.localStorage.setItem("editorCode", editor.getValue())
     }
 
-    handlers(EXERCISE_DESC) = (data: HandlerDataArgument) => {
+    def renderDescription(data: HandlerDataArgument): Unit = {
       $("#desc").empty()
-      val htmlAdmin =
+      var box_title = ReactComponentB[Unit]("Box title")
+        .render(_ =>
+        <.h3(
+          ^.`class` := "std-background",
+          <.i(^.`class` := "icon-book"),
+          " Description:"
+        ).render
+        ).buildU
+      val exercise_description =
+        ReactComponentB[HandlerDataArgument]("Exercise description")
+          .render(data =>
+          <.div(
+            id := "desc-space",
+            data.intro,
+            <.span(
+              id := "desc-desc",
+              isAdminMode ?= (^.`class` := "admin-editable"),
+              dangerouslySetInnerHtml(data.desc)
+            ),
+            isAdminMode ?= <.pre(
+              id     := "desc-edit",
+              ^.`class` := "admin-editable",
+              ^.contentEditable := true,
+              ^.display := "none",
+              data.desc
+            )
+          ).render
+          )
+          .build
+      g.console.log("", <.h3(
+        ^.`class` := "std-background",
+        <.i(^.`class` := "icon-book"),
+        " Description:"
+      ).render.toString)
+      React.render(exercise_description(data), $("#desc")(0).asInstanceOf[dom.Node])
+      $("#desc").prepend(React.renderToStaticMarkup(box_title()))
       if(isAdminMode) {
-        "" //$("""<pre id="desc-edit" contentEditable="true"></pre>""").text()
-      } else ""
-
-      $("#desc").html( """<h3 class="std-background"><i class="icon-book"></i> Description:</h3>""" +
-        """<div id="desc-space">""" + data.intro + """<span id="desc-desc">"""+data.desc+"""</span>"""+htmlAdmin+"""</div>""")
-      if(isAdminMode) {
-        $("#desc-edit").click(() => {
-
+        $("#desc-desc").click(() => {
+          $("#desc-desc").hide()
+          $("#desc-edit").show().focus()
+        })
+        $("#desc-edit").blur(() => {
+          $("#desc-desc").html($("#desc-edit").text()).show()
+          $("#desc-edit").hide()
         })
       }
+      $("#desc").data("received-data", data)
     }
+
+    handlers(EXERCISE_DESC) = renderDescription _
 
     handlers(ENTER_ADMIN_MODE) = (data: HandlerDataArgument) => {
       $("#login-input").attr("type", "hidden")
       $("#admin-login").html("")
       //display new buttons here
       $("#button-solve").html( """<i class="icon-thumbs-up"></i> <span>Solve</span>""")
+      // Re-renders some descriptions
+      renderDescription($("#desc").data("received-data").asInstanceOf[HandlerDataArgument])
     }
 
     handlers(REJECT_ADMIN_ACCESS) = (data: HandlerDataArgument) => {
@@ -615,7 +657,11 @@ object GrammarApp extends JSApp {
     $("#admin-mode").click((event: JQueryEventObject) => {
       eventTitle = "admin mode"
       $("#admin-mode").html("")
-      $("#login-input").attr("type", "password")
+      $("#login-input").attr("type", "password").on("keyup.password", (e: JQueryEventObject) => {
+        if(e.keyCode == key.enter) {
+          $("#admin-login").click()
+        }
+      }).focus()
       $("#admin-login").html( """<i class=""></i><span>Submit</span>""")
       event.preventDefault()
     })
@@ -628,7 +674,7 @@ object GrammarApp extends JSApp {
         notification("Enter a password", "error")
       } else {
         var msg = JSON.stringify(l(
-          action = "adminMode",
+          action = ADMIN_MODE,
           password = passwd
         ))
         leonSocket.send(msg)
