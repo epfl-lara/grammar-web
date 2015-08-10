@@ -2,7 +2,7 @@ name := """grammar-web"""
 
 version := "1.0-SNAPSHOT"
 
-lazy val root = (project in file(".")).enablePlugins(PlayScala).aggregate(js)
+lazy val root = (project in file(".")).enablePlugins(PlayScala).aggregate(js).dependsOn(shared)
 
 scalaVersion := "2.11.1"
 
@@ -25,11 +25,17 @@ javaOptions += "-Xms5G"
 
 lazy val js = (project in file("js")).enablePlugins(ScalaJSPlugin).settings(
   libraryDependencies += "org.scala-js" %%% "scalajs-dom" % "0.8.0",
-  libraryDependencies += "be.doeraene" %%% "scalajs-jquery" % "0.8.0"
+  libraryDependencies += "be.doeraene" %%% "scalajs-jquery" % "0.8.0",
+  libraryDependencies += "com.github.japgolly.scalajs-react" %%% "core" % "0.9.0",
+  jsDependencies +=
+  "org.webjars" % "react" % "0.12.2" / "react-with-addons.js" commonJSName "React",
+  unmanagedSourceDirectories in Compile += baseDirectory.value / "../shared/src"
 ).dependsOn(aceJsProject)
 
 scalaVersion in js := "2.11.1"
 
+lazy val shared = (project in file("shared"))
+scalaVersion in shared := "2.11.1"
 
 lazy val copyjs = TaskKey[Unit]("copyjs", "Copy javascript files to target directory")
 

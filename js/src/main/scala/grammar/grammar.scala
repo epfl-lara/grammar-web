@@ -16,30 +16,12 @@ trait HandlerDataArgument extends js.Any {
   var `type`: String = js.native
   var grammar: String = js.native
   var solution: String = js.native
+  var intro: String = js.native
   var desc: String = js.native
 }
 
-trait JQueryExtended extends JQuery {
-  def width(value: String): JQuery = js.native
-  def alert(): JQuery = js.native
-
-  @JSName("val") def value(e: js.Any): JQuery = js.native
-  def html(e: js.Any): JQuery = js.native
-}
-
-object JQueryExtended {
-  implicit def toJQueryExtended(t: JQuery): JQueryExtended = t.asInstanceOf[JQueryExtended]
-  implicit def dynamicToBoolean(d: js.Dynamic): Boolean = d.asInstanceOf[Boolean]
-  implicit def dynamicToString(d: js.Dynamic): String = d.asInstanceOf[String]
-  implicit def dynamicToHandlerDataArgument(d: js.Dynamic): HandlerDataArgument = d.asInstanceOf[HandlerDataArgument]
-
-  implicit class ComparisonOp(d: js.Dynamic) {
-    def ==(other: String) = d.asInstanceOf[String] == other
-  }
-}
-
 object GrammarApp extends JSApp {
-
+  import Shared._
   import JQueryExtended._
 
   val licenceAgreementTitle = "Consent for Data Collection"
@@ -52,9 +34,9 @@ object GrammarApp extends JSApp {
   val LICENCE_COOKIE_ACCEPTED = "LicenseAccepted"
 
   def setCookie(cname: String, cvalue: String, exdays: Int): Unit = {
-    var d = new js.Date()
+    val d = new js.Date()
     d.setTime(d.getTime() + (exdays * 24 * 60 * 60 * 1000))
-    var expires = "expires=" + d.toUTCString()
+    val expires = "expires=" + d.toUTCString()
     document.cookie = cname + "=" + cvalue + "; " + expires
   }
 
@@ -106,7 +88,6 @@ object GrammarApp extends JSApp {
 
     var hash = window.location.hash
 
-    //var WS = if window.MozWebSocket != null) g.MozWebSocket else g.WebSocket
     var leonSocket: js.Dynamic = null
 
     var headerHeight = $("#title").height() + 20
@@ -321,7 +302,7 @@ object GrammarApp extends JSApp {
        $("#button-hints").addClass("disabled")
      }*/
 
-    handlers("console") = (data: HandlerDataArgument) => {
+    handlers(CONSOLE) = (data: HandlerDataArgument) => {
       var txt = $("#console")
       txt.append("===============\n")
       txt.append(data.message + "\n")
@@ -329,12 +310,12 @@ object GrammarApp extends JSApp {
       addFeedback(data.message)
     }
 
-    handlers("helpmsg") = (data: HandlerDataArgument) => {
+    handlers(HELP_MSG) = (data: HandlerDataArgument) => {
       addFeedback(data.message, "Input Syntax", true)
     }
 
     //disable, enable even handler
-    handlers("disableEvents") = (data: HandlerDataArgument) => {
+    handlers(DISABLE_EVENTS) = (data: HandlerDataArgument) => {
       $.each(data, (fld: js.Any, value: js.Any) => {
         fld.asInstanceOf[String] match {
           case "normalize" => $("#button-norm").addClass("disabled")
@@ -348,7 +329,7 @@ object GrammarApp extends JSApp {
       })
     }
 
-    handlers("enableEvents") = (data: HandlerDataArgument) => {
+    handlers(ENABLE_EVENTS) = (data: HandlerDataArgument) => {
       $.each(data, (fld: js.Any, value: js.Any) => {
         fld.asInstanceOf[String] match {
           case "normalize" => $("#button-norm").removeClass("disabled")
@@ -379,7 +360,7 @@ object GrammarApp extends JSApp {
     }
 
     //adding options to the downdown list
-    handlers("exerciseTypes") = (data: HandlerDataArgument) => {
+    handlers(EXERCISE_TYPES) = (data: HandlerDataArgument) => {
       $("#exercise-select").empty()
       $.each(data, (fld: js.Any, exerciseType: js.Any) => {
         val field = fld.asInstanceOf[String]
@@ -393,7 +374,7 @@ object GrammarApp extends JSApp {
     }
 
     //adding options to the downdown list
-    handlers("problems") = (data: HandlerDataArgument) => {
+    handlers(PROBLEMS) = (data: HandlerDataArgument) => {
       $("#example-loader").empty()
       $("#example-loader").append($( """<option value="" selected="selected">--Select a problem--</option>"""))
       $.each(data, (fld: js.Any, exerciseName: js.Any) => {
@@ -496,7 +477,7 @@ object GrammarApp extends JSApp {
       reconnectIn = -1
     }
 
-    handlers("notification") = (data: HandlerDataArgument) => {
+    handlers(NOTIFICATION) = (data: HandlerDataArgument) => {
       notification(data.content, data.`type`)
     }
 
@@ -559,6 +540,8 @@ object GrammarApp extends JSApp {
       }
     }
 
+    /** Shows a notification
+      */
     def notification(content: String, `type`: String, fd: Int = 0): Unit = {
       var fade = fd
       if (fade == 0) {
@@ -588,31 +571,45 @@ object GrammarApp extends JSApp {
       g.localStorage.setItem("editorCode", editor.getValue())
     }
 
-    handlers("exerciseDesc") = (data: HandlerDataArgument) => {
+    handlers(EXERCISE_DESC) = (data: HandlerDataArgument) => {
       $("#desc").empty()
+      val htmlAdmin =
+      if(isAdminMode) {
+        "" //$("""<pre id="desc-edit" contentEditable="true"></pre>""").text()
+      } else ""
+
       $("#desc").html( """<h3 class="std-background"><i class="icon-book"></i> Description:</h3>""" +
-        """<div id="desc-space">""" + data.desc + """</div>""")
+        """<div id="desc-space">""" + data.intro + """<span id="desc-desc">"""+data.desc+"""</span>"""+htmlAdmin+"""</div>""")
+      if(isAdminMode) {
+        $("#desc-edit").click(() => {
+
+        })
+      }
     }
 
-    handlers("EnterAdminMode") = (data: HandlerDataArgument) => {
+    handlers(ENTER_ADMIN_MODE) = (data: HandlerDataArgument) => {
       $("#login-input").attr("type", "hidden")
       $("#admin-login").html("")
       //display new buttons here
       $("#button-solve").html( """<i class="icon-thumbs-up"></i> <span>Solve</span>""")
     }
 
-    handlers("RejectAdminAccess") = (data: HandlerDataArgument) => {
+    handlers(REJECT_ADMIN_ACCESS) = (data: HandlerDataArgument) => {
       $("#login-input").attr("type", "hidden")
       $("#admin-login").html("")
       $("#admin-mode").html( """<i class=""></i><span>Admin mode</span>""")
       notification("Wrong Password", "error")
     }
 
-    handlers("fullsolution") = (data: HandlerDataArgument) => {
+    handlers(FULL_SOLUTION) = (data: HandlerDataArgument) => {
       //save the current editor value so that we can go back to it
       save(editor.getValue())
       editor.setValue(data.solution)
       editor.selection.clearSelection()
+    }
+
+    def isAdminMode(): Boolean = {
+      $("#admin-mode").html() == ""
     }
 
     $("#admin-mode").click((event: JQueryEventObject) => {
@@ -717,7 +714,7 @@ object GrammarApp extends JSApp {
 
     resizeEditor()
 
-    handlers("replace_grammar") = (data: HandlerDataArgument) => {
+    handlers(REPLACE_GRAMMAR) = (data: HandlerDataArgument) => {
       storeCurrent(editorSession.getValue())
       editorSession.setValue(data.grammar)
     }

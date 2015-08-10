@@ -1,31 +1,21 @@
 package models
 
+import java.io.File
+import java.util.concurrent.Executors
+
 import akka.actor._
-import scala.concurrent.duration._
-import scala.concurrent._
+import grammar.Shared._
+import grammar._
+import grammar.exercises.{ExerciseType, _}
+import play.api.Play.current
 import play.api._
-import play.api.libs.json._
 import play.api.libs.iteratee._
-import play.api.libs.concurrent._
 import play.api.libs.json.Json._
 import play.api.libs.json.Writes._
-import akka.pattern.ask
-import play.api.Play.current
-import grammar.GrammarParser
-import grammar.exercises._
-import grammar.EBNFGrammar.BNFGrammar
-import grammar.CFGrammar.Grammar
-import grammar.BNFConverter
-import grammar.CFGrammar
-import java.util.concurrent.Executors
-import scala.util.Success
-import scala.util.Failure
-import grammar.exercises.ExerciseType
-import play.Logger
-import java.util.Calendar
-import java.io.File
-import grammar._
-import java.io.FileNotFoundException
+import play.api.libs.json._
+
+import scala.concurrent._
+import scala.util.{Failure, Success}
 ///import grammar.CNFConverter
 
 object grammarDB {
@@ -56,6 +46,7 @@ object AdminPassword {
 
 class WebSession(remoteIP: String) extends Actor {
   import Protocol._
+  import Shared._
   //creating a thread pool for futures
   implicit val ec = ExecutionContext.fromExecutor(Executors.newFixedThreadPool(2))
 
@@ -74,18 +65,18 @@ class WebSession(remoteIP: String) extends Actor {
     val timestamp = new java.text.SimpleDateFormat("dd-HH-mm-ss").format(new java.util.Date())
     eventLogger.println("[>][" + msgid + "][" + timestamp + "] " + msg)
     eventLogger.flush()
-    pushMessage(toJson(Map("kind" -> "console", "level" -> "log", "message" -> msg)))
+    pushMessage(toJson(Map(KIND.console, level.log, MESSAGE -> msg)))
   }
 
   def clientError(msg: String)(implicit msgid: Long) = {
     val timestamp = new java.text.SimpleDateFormat("dd-HH-mm-ss").format(new java.util.Date())
     eventLogger.println("[>][" + msgid + "][" + timestamp + "] " + msg)
     eventLogger.flush()
-    pushMessage(toJson(Map("kind" -> "console", "level" -> "error", "message" -> msg)))
+    pushMessage(toJson(Map(KIND.console, level.error, MESSAGE -> msg)))
   }
 
   def event(kind: String, data: Map[String, JsValue]) = {
-    pushMessage(toJson(Map("kind" -> toJson(kind)) ++ data))
+    pushMessage(toJson(Map(KIND.key -> toJson(kind) ) ++ data))
   }
 
   //operation list
@@ -107,12 +98,12 @@ class WebSession(remoteIP: String) extends Actor {
             clientLog(resstr)
             extype match {
               case Some(ExerciseType.GrammarEx) =>
-                enableEvents(List("doCheck", "getHints"))
+                enableEvents(List(DO_CHECK, GET_HINTS))
               case Some(_) =>
-                enableEvents(List("doCheck"))
+                enableEvents(List(DO_CHECK))
               case _ =>
                 //allow every thing here
-                enableEvents(List("doCheck", "getHints"))
+                enableEvents(List(DO_CHECK, GET_HINTS))
             }
           case Partial(partRes, nextPart) =>
             //send partial result to the client and continue the next operation
@@ -135,12 +126,12 @@ class WebSession(remoteIP: String) extends Actor {
 
   def disableEvents(events: List[String]) {
     val emptymsg = toJson("")
-    event("disableEvents", events.map(_ -> emptymsg).toMap)
+    event(DISABLE_EVENTS, events.map(_ -> emptymsg).toMap)
   }
 
   def enableEvents(events: List[String]) {
     val emptymsg = toJson("")
-    event("enableEvents", events.map(_ -> emptymsg).toMap)
+    event(ENABLE_EVENTS, events.map(_ -> emptymsg).toMap)
   }
 
   //keep track of the mode 
@@ -161,17 +152,17 @@ class WebSession(remoteIP: String) extends Actor {
         eventLogger.flush()
 
         (msg \ "action").as[String] match {
-          case "hello" =>
+          case HELLO =>
             clientLog("Welcome!")
 
-          case "adminMode" =>
+          case ADMIN_MODE =>
             if (AdminPassword.checkPassword((msg \ "password").as[String])) {
               adminMode = true
-              event("EnterAdminMode", Map())
+              event(ENTER_ADMIN_MODE, Map())
             } else
-              event("RejectAdminAccess", Map())
+              event(REJECT_ADMIN_ACCESS, Map())
 
-          case "abortOps" =>
+          case ABORT_OPS =>
             //abort the current operation
             currentOp match {
               case Some((_, opctx)) =>
@@ -185,14 +176,14 @@ class WebSession(remoteIP: String) extends Actor {
             val exType = ExerciseType.getExType(exid)
             exType match {
               case Some(ExerciseType.GrammarEx) =>
-                enableEvents(List("getHints", "doCheck"))
-              case Some(_) => enableEvents(List("doCheck"))
+                enableEvents(List(GET_HINTS, DO_CHECK))
+              case Some(_) => enableEvents(List(DO_CHECK))
               case None =>
                 //here, enable all to be safe
-                enableEvents(List("getHints", "doCheck"))
+                enableEvents(List(GET_HINTS, DO_CHECK))
             }
 
-          case "doUpdateCode" =>
+          case DO_UPDATE_CODE =>
             ;
           /*val rules = grammar.split("\n").toList
             //try to parse the grammar (syntax errors will be displayed to the console)            
@@ -200,13 +191,13 @@ class WebSession(remoteIP: String) extends Actor {
             val (bnf, errstr) = (new GrammarParser()).parseGrammar(rules)
             if (!bnf.isDefined)
               clientLog("Parse Error: " + errstr)*/
-          case "getExerciseTypes" =>
+          case GET_EXERCISE_TYPES =>
             //read all exercises and send their names and ids to the clients                        
             val data = ExerciseType.allExercises.map(exType =>
               (exType.id.toString -> toJson(exType.toString))).toMap
-            event("exerciseTypes", data)
+            event(EXERCISE_TYPES, data)
 
-          case "getProblemList" =>
+          case GET_PROBLEM_LIST =>
             //read all problems in the grammar database that suit the exercise selected
             //and send their names and ids to the clients
             val exid = (msg \ "exerciseId").as[String].toInt
@@ -215,18 +206,18 @@ class WebSession(remoteIP: String) extends Actor {
               val grammarEntries = grammarDB.db.entriesForExercise(exType.get)
               //send all grammarEntries
               val data = generateProblemList(grammarEntries).map { case (k, v) => (k -> toJson(v)) }.toMap
-              event("problems", data)
+              event(PROBLEMS, data)
               exType.get match {
                 //leave doCheck untouched
-                case ExerciseType.GrammarEx => enableEvents(List("getHints", "normalize"))
-                case _ => disableEvents(List("getHints", "normalize"))
+                case ExerciseType.GrammarEx => enableEvents(List(GET_HINTS, NORMALIZE))
+                case _ => disableEvents(List(GET_HINTS, NORMALIZE))
               }
             } else {
               //log error message
               clientLog("Exercise with id: " + exid + " does not exist")
             }
 
-          case "loadExercise" =>
+          case LOAD_EXERCISE =>
             val pid = (msg \ "problemId").as[String].toInt
             val data = grammarDB.db.grammarEntries.find(_.id == pid) match {
               case None =>
@@ -236,20 +227,20 @@ class WebSession(remoteIP: String) extends Actor {
                 val extype = ExerciseType.getExType(exid)
                 //clientLog("Exercise ID: "+exid+" grammar: "+gentry.reference)
                 if (extype.isDefined) {
-                  val (stmt, initialGrammar) = generateProblemStatement(gentry, extype.get)
-                  val data = Map("desc" -> toJson(stmt))
-                  event("exerciseDesc", data)
+                  val (intro, desc, initialGrammar) = generateProblemStatement(gentry, extype.get)
+                  val data = Map(EXERCISE_DESC.intro -> toJson(intro), EXERCISE_DESC.desc -> toJson(desc))
+                  event(EXERCISE_DESC, data)
                   //some problems have an initial answer that the users have to refine 
                   if (initialGrammar.isDefined) {
                     val data = Map("grammar" -> toJson(initialGrammar.get.toString))
-                    event("replace_grammar", data)
+                    event(REPLACE_GRAMMAR, data)
                   }
                 } else
                   //log error message
                   clientLog("Exercise with id: " + exid + " does not exist")
             }
 
-          case "doCheck" =>
+          case DO_CHECK =>
             val pid = (msg \ "problemId").as[String].toInt
             grammarDB.db.grammarEntries.find(_.id == pid) match {
               case None =>
@@ -266,14 +257,14 @@ class WebSession(remoteIP: String) extends Actor {
                   }
                   recordFuture(checkFuture, opctx, extype)
                   //disable check and hints event, leave 'normalize' untouched              
-                  disableEvents(List("getHints", "doCheck"))
+                  disableEvents(List(GET_HINTS, DO_CHECK))
 
                 } else
                   //log error message
                   clientLog("Exercise with id: " + exid + " does not exist")
             }
 
-          case "checkLL1" =>
+          case CHECK_LL1 =>
             val grammar = (msg \ "code").as[String]
             val rules = grammar.split("\n").toList
             //try to parse the grammar (syntax errors will be displayed in the client console)
@@ -285,7 +276,7 @@ class WebSession(remoteIP: String) extends Actor {
               clientLog(checkLL1(bnfGrammar.get).get)
             }
 
-          case "checkAmbiguity" =>
+          case CHECK_AMBIGUITY =>
             val grammar = (msg \ "code").as[String]
             val rules = grammar.split("\n").toList
             //try to parse the grammar (syntax errors will be displayed in the client console)
@@ -296,7 +287,7 @@ class WebSession(remoteIP: String) extends Actor {
               clientLog(checkAmbiguity(bnfGrammar.get)(getGlobalContext))
             }
 
-          case "normalize" =>
+          case NORMALIZE =>
             val grammar = (msg \ "code").as[String]
             val rules = grammar.split("\n").toList
             //try to parse the grammar (syntax errors will be displayed in the client console)
@@ -307,10 +298,10 @@ class WebSession(remoteIP: String) extends Actor {
               //convert the grammar to cnf form and then reconvert              
               val normalGrammar = CFGrammar.prettyPrint(bnfGrammar.get.cfGrammar.fromCNF)
               val data = Map("grammar" -> toJson(normalGrammar.toString))
-              event("replace_grammar", data)
+              event(REPLACE_GRAMMAR, data)
             }
 
-          case "getHints" =>
+          case GET_HINTS =>
             val pid = (msg \ "problemId").as[String].toInt
             val exercise = grammarDB.db.grammarEntries.find(_.id == pid)
             exercise match {
@@ -331,21 +322,21 @@ class WebSession(remoteIP: String) extends Actor {
                   }
                   recordFuture(hintFuture, opctx, None)
                   //disable hints and do-check, leave normalized untouched
-                  disableEvents(List("getHints", "doCheck"))
+                  disableEvents(List(GET_HINTS, DO_CHECK))
                 }
             }
 
-          case "getHelp" =>
+          case GET_HELP =>
             val exid = (msg \ "exerciseId").as[String].toInt
             val extype = ExerciseType.getExType(exid)
             if (extype.isDefined) {
-              val data = Map("message" -> toJson(helpMesage(extype.get)))
-              event("helpmsg", data)
+              val data = Map(MESSAGE -> toJson(helpMesage(extype.get)))
+              event(HELP_MSG, data)
             } else
               //log error message
               clientLog("Exercise with id: " + exid + " does not exist")
 
-          case "solve" =>
+          case SOLVE =>
             if (!adminMode) {
               clientLog("'Solve' operation can be invoked only in admin mode.")
             } else {
@@ -362,7 +353,7 @@ class WebSession(remoteIP: String) extends Actor {
                     val sol = getSolution(gentry, extype.get, userAnswer)
                     if (sol.isDefined) {
                       val data = Map("solution" -> toJson(sol.get))
-                      event("fullsolution", data)
+                      event(FULL_SOLUTION, data)
                     } else
                       clientLog("Cannot solve the problem.")
                   } else
@@ -388,20 +379,19 @@ class WebSession(remoteIP: String) extends Actor {
       clientError("Unknown message: " + msg)(0)
   }
 
-  import grammar.examples._
-  import grammar.utils._
   import grammar._
-  import repair._
-  import parsing._
+  import BNFConverter._
   import CFGrammar._
   import EBNFGrammar._
-  import BNFConverter._
+  import clients._
   import equivalence._
   import generators.SizeBasedRandomAccessGenerator
   import grammar.exercises._
-  import repair.RepairResult._
-  import clients._
   import ExerciseType._
+  import grammar.utils._
+  import parsing._
+  import repair.RepairResult._
+  import repair._
 
   type SententialForm = List[Symbol]
   type Word = List[Terminal]
@@ -459,16 +449,16 @@ class WebSession(remoteIP: String) extends Actor {
       "TODO"
   }
 
-  def generateProblemStatement(gentry: GrammarEntry, extype: ExType): (String, Option[BNFGrammar]) = extype match {
+  def generateProblemStatement(gentry: GrammarEntry, extype: ExType): (String, String, Option[BNFGrammar]) = extype match {
     case GrammarEx if gentry.isLL1Entry =>
-      ("Provide an LL(1) grammar for " + gentry.desc, gentry.initGrammar)
+      ("Provide an LL(1) grammar for ", gentry.desc, gentry.initGrammar)
     case GrammarEx =>
-      ("Provide a grammar for " + gentry.desc, gentry.initGrammar)
+      ("Provide a grammar for ", gentry.desc, gentry.initGrammar)
     case CNFEx =>
-      ("Convert the following grammar to Chomsky normal form " +
+      ("Convert the following grammar to Chomsky normal form ",
         gentry.reference.toHTMLString, None)
     case GNFEx =>
-      ("Convert the following grammar to Griebach normal form " +
+      ("Convert the following grammar to Griebach normal form ",
         gentry.reference.toHTMLString, None)
     case DerivationEx =>
       //generate a word for derivations      
@@ -492,12 +482,12 @@ class WebSession(remoteIP: String) extends Actor {
       wordForDerivation match {
         case Some(w) =>
           ("Provide a leftmost derivation for the word \"" + wordToString(w) +
-            "\" from the grammar " + gentry.reference.toHTMLString, None)
+            "\" from the grammar ", gentry.reference.toHTMLString, None)
         case _ =>
-          ("Cannot generate a word for the grammar of size: " + minWordLength, None)
+          ("Cannot generate a word for the grammar of size: ", minWordLength.toString, None)
       }
     case CYKEx =>
-      (s"""Show the CYK parse table for the word "${wordToString(gentry.word.get)}" of the grammar """ +
+      (s"""Show the CYK parse table for the word "${wordToString(gentry.word.get)}" of the grammar """,
         renameAutoSymbols(gentry.cnfRef).toHTMLString, None)
     case ProgLangEx =>
       val stmt = s"""Refine the grammar for ${gentry.desc} shown in the editor""" +
@@ -506,7 +496,7 @@ class WebSession(remoteIP: String) extends Actor {
       val initGrammar = gentry.initGrammar
       if (!initGrammar.isDefined)
         throw new IllegalStateException("Initial grammar is not defined for problem: " + gentry.id)
-      (stmt, initGrammar)
+      (stmt, "", initGrammar)
   }
 
   def getSolution(gentry: GrammarEntry, extype: ExType, userAnswer: String): Option[String] = extype match {
