@@ -579,10 +579,10 @@ object GrammarApp extends JSApp {
       val exid = $("#exercise-select").find(":selected").value()
       val pid = $("#example-loader").find(":selected").value()
       val msg = JSON.stringify(l(
-        action = SAVE_EXERCISE,
-        desc = $("#desc-edit").text(),
-        exerciseId = exid,
-        problemId = pid
+        ACTION -> SAVE_GRAMMAR,
+        WHAT -> Seq(SAVE.description).mkString(","),
+        PROBLEM_ID -> pid,
+        SAVE.description -> $("#desc-edit").text()
       ))
       leonSocket.send(msg)
     }

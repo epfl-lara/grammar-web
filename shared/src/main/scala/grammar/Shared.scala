@@ -10,6 +10,10 @@ trait StringLike {
 object Shared {
   implicit def convertStringLike(t: StringLike): String = t.string
 
+  val ACTION = "action"
+  val WHAT = "what"
+  val PROBLEM_ID =  "problemId"
+
   /* In-Server events */
   val ADMIN_MODE = "adminMode"
   val HELLO = "hello"
@@ -25,7 +29,15 @@ object Shared {
   val GET_HINTS = "getHints"
   val GET_HELP = "getHelp"
   val SOLVE = "solve"
-  val SAVE_EXERCISE = "saveGrammar"
+  val SAVE_GRAMMAR = "saveGrammar"
+  object SAVE {
+    val title = "title"
+    val description = "description"
+    val reference = "reference"
+    val initial = "initial"
+    val word = "word"
+    val usecases = "usecases"
+  }
 
   /* Out-server events */
   val CONSOLE = "console"
