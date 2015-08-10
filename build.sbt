@@ -46,6 +46,8 @@ copyjs := {
   IO.copy(files, true)
 }
 
+watchSources := watchSources.value.filter ( source => Seq("js-fastopt.js", "js-fastopt.js.map", "js-jsdeps.js").indexOf(source.getName) == -1 )
+
 addCommandAlias("runServer", ";fastOptJS;copyjs;run")
 addCommandAlias("fastOptCopy", ";fastOptJS;copyjs")
 
