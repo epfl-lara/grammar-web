@@ -13,6 +13,9 @@ object Shared {
   val ACTION = "action"
   val WHAT = "what"
   val PROBLEM_ID =  "problemId"
+  val EXERCISE_ID =  "exerciseId"
+
+  val ALL_GRAMMARS_ID = "all_grammars"
 
   /* In-Server events */
   val ADMIN_MODE = "adminMode"
@@ -37,6 +40,7 @@ object Shared {
     val initial = "initial"
     val word = "word"
     val usecases = "usecases"
+    val ALL_USE_CASES = "all_usecases"
   }
 
   /* Out-server events */
@@ -65,7 +69,7 @@ object Shared {
     val key = "kind"
     def apply(value: String) = key -> value
     def ->(value: String) = this(value)
-    lazy val console = this("console")
+    lazy val console = this(CONSOLE)
   }
   object level {
     private val key = "level"

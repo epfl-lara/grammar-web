@@ -1,5 +1,7 @@
 package grammar
 
+import japgolly.scalajs.react.vdom.Attr
+
 import scala.scalajs.js
 import scala.scalajs.js.annotation.JSName
 import scala.scalajs.js.{JSON, JSApp}
@@ -12,8 +14,8 @@ import org.scalajs.dom._
 import japgolly.scalajs.react.vdom.prefix_<^._
 import japgolly.scalajs.react.vdom.all.{id, dangerouslySetInnerHtml}
 import japgolly.scalajs.react._
-
 trait HandlerDataArgument extends js.Any {
+  var kind: String = js.native
   val reference: String = js.native
   var message: String = js.native
   var content: String = js.native
@@ -21,10 +23,17 @@ trait HandlerDataArgument extends js.Any {
   var grammar: String = js.native
   var solution: String = js.native
   var intro: String = js.native
-  var desc: String = js.native
+  var desc: String = js.native // Contains the user-shown description of the problem.
+  var description: String = js.native // contains the grammar description
+  var initial: String = js.native
+  var title: String = js.native
+  var word: String = js.native
+  var usecases: String = js.native
+  var all_usecases: String = js.native
 }
 
 object GrammarApp extends JSApp {
+
   import Shared._
   import JQueryExtended._
 
@@ -53,8 +62,70 @@ object GrammarApp extends JSApp {
     ""
   }
 
+
+  // Used to merge feedbacks if they are too close.
+  var lastTitle = ""
+  var lastTime = 0.0
+  var eventTitle = "Output"
+
+  var all_use_cases: String = ""
+
   /** Loads when the document is ready */
-  $(document).ready(() => {
+  $(document).ready(onDocumentReady _)
+
+  /** Adds a feedback to the feedback column, and fade/removes the old ones */
+  def addFeedback(text: String, titleArg: String = null, htmlstring: Boolean = false): Unit = {
+    var title = titleArg
+    if (title == null) title = eventTitle
+    var newTime = new js.Date().getTime()
+    if (title == lastTitle && newTime - lastTime < 400) {
+      //wait for all parts of the same feedback to arrive same feedback/
+      var prevFeedback = $("#feedbackcolumn .action .feedback").first()
+      prevFeedback.text(prevFeedback.text() + "\n\n" + text)
+      return
+    }
+    lastTime = newTime
+    lastTitle = title
+
+    val feedback = $("<div>").addClass("action")
+    var close = $("<div>").text("X").addClass("closeButton").css("position", "absolute").css("right", "0px").css("z-index", "1000").click(
+      ((f: JQuery) => (() => f.remove()))(feedback))
+    feedback.append(close)
+    if (title != null) {
+      feedback.append($("<h3>").text(title))
+    }
+    var divelem = $("<div>").addClass("feedback")
+    if (htmlstring == true)
+      feedback.append(divelem.html(text))
+    else
+      feedback.append(divelem.text(text))
+
+    feedback.click(((self: Element) => $(self).css("opacity", 1)): js.ThisFunction)
+    feedback.insertAfter($("#feedbackcolumn #notifications"))
+    feedback.hide()
+    //.prepend(feedback);
+    js.timers.setTimeout(50) {
+      feedback.show("blind")
+      $("#feedbackcolumn").find(".action").each((index: js.Any, elem: dom.Element) => {
+        if (index.asInstanceOf[Int] >= 1) {
+          $(elem).remove()
+        }
+      }.asInstanceOf[js.Any])
+      /*setTimeout( () => {
+        $("#feedbackcolumn").find(".action").each(function(index, elem) {
+          if(index >= 1) {
+            $(elem).hide("blind")
+            //setTimeout(() => { $(elem).remove(); }, 400);
+          } else {
+            $(elem).animate({opacity: 1.0/(index + 2)}, 500);
+          }
+        });
+      }, 300);*/
+    }
+  }
+
+
+  def onDocumentReady(): Unit = {
     println("Starting the script")
     val editor = ace.edit("codebox")
     println("Continuing the script")
@@ -138,10 +209,7 @@ object GrammarApp extends JSApp {
     var searchFinished = false
     var context = "unknown"
 
-    // Used to merge feedbacks if they are too close.
-    var lastTitle = ""
-    var lastTime = 0.0
-    var eventTitle = "Output"
+
 
     var lastReconnectDelay = 0
     var reconnectIn = 0
@@ -251,6 +319,8 @@ object GrammarApp extends JSApp {
 
     updateUndoRedo()
 
+    var editorSession = editor.getSession()
+
     /**
      * Compilation
      */
@@ -281,12 +351,12 @@ object GrammarApp extends JSApp {
 
 
     def receiveEvent(event: JQueryEventObject) {
-      var data = JSON.parse(event.data.asInstanceOf[String])
+      var data = JSON.parse(event.data.asInstanceOf[String]).asInstanceOf[HandlerDataArgument]
       if (!js.isUndefined(handlers(data.kind))) {
         handlers(data.kind)(data)
       } else {
-        g.console.log("Unknown event type: " + data.kind)
-        g.console.log(data)
+        console.log("Unknown event type: " + data.kind)
+        console.log(data)
       }
     }
 
@@ -347,29 +417,33 @@ object GrammarApp extends JSApp {
       })
     }
 
+    def loadProblemsForExercise(exid: String): Unit = {
+      val msg = JSON.stringify(l(
+        ACTION -> GET_PROBLEM_LIST,
+        EXERCISE_ID -> exid
+      ))
+      leonSocket.send(msg)
+    }
 
     def loadProblems(): Unit = {
-      var exid = $("#exercise-select").find(":selected").value().asInstanceOf[String]
+      val exid = getCurrentExerciseId()
       if (exid == "") {
         $("#example-loader").prop("disabled", true)
         //notification("Excercise not selected!", "error")
       } else {
-        var msg = JSON.stringify(l(
-          action = "getProblemList",
-          exerciseId = exid
-        ))
-        leonSocket.send(msg)
+        loadProblemsForExercise(exid)
         //doHelp() should we enable this ?
       }
     }
 
     //adding options to the downdown list
-    handlers(EXERCISE_TYPES) = (data: HandlerDataArgument) => {
+    handlers(EXERCISE_TYPES) = (data: HandlerDataArgument) => { // This is not the right type here.
       $("#exercise-select").empty()
       $.each(data, (fld: js.Any, exerciseType: js.Any) => {
         val field = fld.asInstanceOf[String]
         if (field != "kind") {
-          $("#exercise-select").append($("<option></option>").value(field).html(exerciseType))
+          val value = exerciseType.asInstanceOf[js.Dynamic].key.asInstanceOf[String]
+          $("#exercise-select").append($("<option>").value(value).html(exerciseType.asInstanceOf[js.Dynamic].title))
         }
         ().asInstanceOf[js.Any]
       })
@@ -389,69 +463,24 @@ object GrammarApp extends JSApp {
         ().asInstanceOf[js.Any]
       })
       $("#example-loader").prop("disabled", false)
-    }
-
-    /** Adds a feedback to the feedback column, and fade/removes the old ones */
-    def addFeedback(text: String, titleArg: String = null, htmlstring: Boolean = false): Unit = {
-      var title = titleArg
-      if (title == null) title = eventTitle
-      var newTime = new js.Date().getTime()
-      if (title == lastTitle && newTime - lastTime < 400) {
-        //wait for all parts of the same feedback to arrive same feedback/
-        var prevFeedback = $("#feedbackcolumn .action .feedback").first()
-        prevFeedback.text(prevFeedback.text() + "\n\n" + text)
-        return
-      }
-      lastTime = newTime
-      lastTitle = title
-
-      val feedback = $("<div>").addClass("action")
-      var close = $("<div>").text("X").addClass("closeButton").css("position", "absolute").css("right", "0px").css("z-index", "1000").click(
-        ((f: JQuery) => (() => f.remove()))(feedback))
-      feedback.append(close)
-      if (title != null) {
-        feedback.append($("<h3>").text(title))
-      }
-      var divelem = $("<div>").addClass("feedback")
-      if (htmlstring == true)
-        feedback.append(divelem.html(text))
-      else
-        feedback.append(divelem.text(text))
-
-      feedback.click(((self: Element) => $(self).css("opacity", 1)): js.ThisFunction)
-      feedback.insertAfter($("#feedbackcolumn #notifications"))
-      feedback.hide()
-      //.prepend(feedback);
-      js.timers.setTimeout(50) {
-        feedback.show("blind")
-        $("#feedbackcolumn").find(".action").each((index: js.Any, elem: dom.Element) => {
-          if (index.asInstanceOf[Int] >= 1) {
-            $(elem).remove()
-          }
-        }.asInstanceOf[js.Any])
-        /*setTimeout( () => {
-          $("#feedbackcolumn").find(".action").each(function(index, elem) {
-            if(index >= 1) {
-              $(elem).hide("blind")
-              //setTimeout(() => { $(elem).remove(); }, 400);
-            } else {
-              $(elem).animate({opacity: 1.0/(index + 2)}, 500);
-            }
-          });
-        }, 300);*/
+      if(isAdminMode) {
+        $("#example-loader").append($("<input type=\"button\" value='Add new grammar'").click(addNewExercise _))
       }
     }
 
+    def loadExerciseTypes(): Unit = {
+      val msg = JSON.stringify(l(ACTION -> GET_EXERCISE_TYPES))
+      leonSocket.send(msg)
+    }
 
     def openEvent(event: JQueryEventObject) {
       setConnected()
       leonSocket.onmessage = receiveEvent _
-      var msg = JSON.stringify(
+      val msg = JSON.stringify(
         l(action = "hello")
       )
       leonSocket.send(msg)
-      msg = JSON.stringify(l(action = "getExerciseTypes"))
-      leonSocket.send(msg)
+      loadExerciseTypes()
     }
 
 
@@ -531,8 +560,8 @@ object GrammarApp extends JSApp {
       leonSocket.onopen = openEvent _
       leonSocket.onclose = closeEvent _
       leonSocket.onerror = (event: JQueryEventObject) => {
-        g.console.log("ERROR")
-        g.console.log(event)
+        console.log("ERROR")
+        console.log(event)
       }
     }
 
@@ -576,68 +605,97 @@ object GrammarApp extends JSApp {
     }
 
     def saveGrammar(e: ReactEventI): Unit = {
+      saveGrammarProperty(SAVE.description)($("#desc-edit").text())
+    }
+
+    def saveGrammarProperty(property: String)(value: String): Unit = {
       val exid = $("#exercise-select").find(":selected").value()
       val pid = $("#example-loader").find(":selected").value()
       val msg = JSON.stringify(l(
         ACTION -> SAVE_GRAMMAR,
-        WHAT -> Seq(SAVE.description).mkString(","),
+        WHAT -> Seq(property).mkString(","),
         PROBLEM_ID -> pid,
-        SAVE.description -> $("#desc-edit").text()
+        property -> value
       ))
       leonSocket.send(msg)
     }
 
-
-    var editorSession = editor.getSession()
+    def addNewExercise() = {
+      renderDescription(l(
+        reference= "S -> a | a b S | \"\"",
+        intro= "[Computer-generated]",
+        desc= "[Computer-generated]",
+        description= "The description of your grammar here",
+        initial= "S -> a",
+        title= "Problem title",
+        word= "a b a",
+        usecases= "all",
+        all_usecases = all_use_cases
+      ).asInstanceOf[HandlerDataArgument])
+    }
 
     /** Renders the description of the exercise, plus admin stuff if needed*/
     def renderDescription(data: HandlerDataArgument): Unit = {
       $("#desc").empty()
-      var box_title = ReactComponentB[Unit]("Box title")
-        .render(_ =>
-        <.h3(
-          ^.`class` := "std-background",
-          <.i(^.`class` := "icon-book"),
-          " Description:"
-        ).render
-        ).buildU
-      val openReferenceButton = ReactComponentB[HandlerDataArgument]("Open reference grammar button")
-      .render(data => <.input(^.`type` := "button", ^.value:="reference", ^.onClick --> {
-        g.console.log(data.reference)
-        replaceGrammar(data.reference)
-      }))
-      .build
+      import AdminMode._
 
+      def referenceButton = adminButton(("reference", () => replaceGrammar(data.reference)))
+      def initialButton = adminButton(("initial", () => replaceGrammar(data.asInstanceOf[js.Dynamic].initial)))
       val exercise_description =
         ReactComponentB[HandlerDataArgument]("Exercise description")
-          .render(data =>
+          .render(P =>
+          <.div(
+          <.h3(
+            ^.`class` := "std-background",
+            <.i(^.`class` := "icon-book"),
+            " Description:"
+          ),
           <.div(
             id := "desc-space",
-            data.intro,
-            isAdminMode ?= <.input(^.`type` := "button", ^.value:="save", ^.onClick  ==> saveGrammar),
-            isAdminMode ?= openReferenceButton(data),
+            isAdminMode ?= <.span(<.b("Title:"),
+              AdminMode.EditableField(P.title, saveGrammarProperty(SAVE.title)).build,
+              <.br(),
+              <.b("Grammars: "),
+              referenceButton,
+              initialButton,
+              <.br()
+            ),
+            isAdminMode ?= <.b("Exercise intro:"),
+            P.intro,
+            isAdminMode ?= <.br(),
+            isAdminMode ?= <.b("Description:"),
+            isAdminMode ?= <.input(^.`class` := "admin-button", ^.`type` := "button", ^.value:="save", ^.onClick  ==> saveGrammar),
             <.span(
               id := "desc-desc",
               isAdminMode ?= (^.`class` := "admin-editable"),
-              dangerouslySetInnerHtml(data.desc)
+              dangerouslySetInnerHtml(if(isAdminMode) P.description else P.desc)
             ),
             isAdminMode ?= <.pre(
               id     := "desc-edit",
               ^.`class` := "admin-editable",
               ^.contentEditable := true,
               ^.display := "none",
-              data.desc
+              P.desc
+            ),
+            isAdminMode ?= <.span(
+              <.b("Word:"),
+              AdminMode.EditableField( if(!js.isUndefined(P.asInstanceOf[js.Dynamic].word)) P.word else "", saveGrammarProperty(SAVE.word)).build,
+              <.br()
+            ),
+            isAdminMode ?= <.span(
+              <.b("Use cases:"),
+              AdminMode.UseCasesChecks({
+                all_use_cases = P.asInstanceOf[js.Dynamic].all_usecases
+                all_use_cases.asInstanceOf[String].split("\n").map { v => {
+                  val splitted = v.split(";")
+                  (splitted(0), splitted(1))
+                }
+                }
+              }, P.asInstanceOf[js.Dynamic].usecases.split("\n"), saveGrammarProperty(SAVE.usecases)).build
             )
-          ).render
-          )
-          .build
-      g.console.log("", <.h3(
-        ^.`class` := "std-background",
-        <.i(^.`class` := "icon-book"),
-        " Description:"
-      ).render.toString)
+          )).render
+      ).build
       React.render(exercise_description(data), $("#desc")(0).asInstanceOf[dom.Node])
-      $("#desc").prepend(React.renderToStaticMarkup(box_title()))
       if(isAdminMode) {
         $("#desc-desc").click(() => {
           $("#desc-desc").hide()
@@ -651,7 +709,7 @@ object GrammarApp extends JSApp {
       $("#desc").data("received-data", data)
     }
 
-    handlers(EXERCISE_DESC) = renderDescription _
+    handlers(EXERCISE_DESC) = (data: HandlerDataArgument) => renderDescription(data)
 
     handlers(ENTER_ADMIN_MODE) = (data: HandlerDataArgument) => {
       $("#login-input").attr("type", "hidden")
@@ -659,7 +717,23 @@ object GrammarApp extends JSApp {
       //display new buttons here
       $("#button-solve").html( """<i class="icon-thumbs-up"></i> <span>Solve</span>""")
       // Re-renders some descriptions
-      renderDescription($("#desc").data("received-data").asInstanceOf[HandlerDataArgument])
+      // TODO: Re-ask for the exercise.
+      val exId = getCurrentExerciseId()
+      val pid = getCurrentProblemId()
+      console.log("setting timer up...")
+      js.timers.setTimeout(0){
+        loadExerciseTypes()
+      }
+      if(exId != "") {
+        loadProblemsForExercise(exid = exId)
+        js.timers.setTimeout(1000){ $(s"#exercise-select option[value=$exId]").attr("selected", true) }
+      }
+      if(pid != "") {
+        js.timers.setTimeout(1000)(loadExerciseFromId(exId, pid))
+        js.timers.setTimeout(1000){ $(s"#example-loader option[value=$pid]").attr("selected", true) }
+      }
+
+      //renderDescription($("#desc").data("received-data").asInstanceOf[HandlerDataArgument])
     }
 
     handlers(REJECT_ADMIN_ACCESS) = (data: HandlerDataArgument) => {
@@ -708,17 +782,27 @@ object GrammarApp extends JSApp {
       event.preventDefault()
     })
 
+    def getCurrentExerciseId(): String = {
+      $("#exercise-select").find(":selected").value().asInstanceOf[String]
+    }
+    def getCurrentProblemId(): String = {
+      $("#example-loader").find(":selected").value().asInstanceOf[String]
+    }
 
-
-    def loadSelectedExample() {
-      var exid = $("#exercise-select").find(":selected").value()
-      var pid = $("#example-loader").find(":selected").value()
-      var msg = JSON.stringify(l(action = LOAD_EXERCISE, exerciseId = exid, problemId = pid))
+    def loadExerciseFromId(exid: String, pid: String) {
+      if(pid == "" || exid == "") return;
+      val msg = JSON.stringify(l(ACTION -> LOAD_EXERCISE, EXERCISE_ID -> exid, PROBLEM_ID -> pid))
       leonSocket.send(msg)
     }
 
+    def loadSelectedExercise() {
+      var exid = getCurrentExerciseId()
+      var pid = getCurrentProblemId()
+      loadExerciseFromId(exid, pid)
+    }
+
     $("#exercise-select").change(loadProblems _)
-    $("#example-loader").change(loadSelectedExample _)
+    $("#example-loader").change(loadSelectedExercise _)
 
     def loadExample(group: String, id: Int = 0): Unit = {
       if (id != 0) {
@@ -830,8 +914,8 @@ object GrammarApp extends JSApp {
       //first save the state
       save(currentCode)
       //get "id" of the selected problem
-      var exid = $("#exercise-select").find(":selected").value().asInstanceOf[String]
-      var pid = $("#example-loader").find(":selected").value().asInstanceOf[String]
+      var exid = getCurrentExerciseId()
+      var pid = getCurrentProblemId()
       //var pid = $("#example-loader").find(":selected").val()
       if (exid == "")
         notification("Excercise not selected!", "error")
@@ -850,7 +934,7 @@ object GrammarApp extends JSApp {
       var currentCode = editor.getValue()
       //first save the code
       save(currentCode)
-      var pid = $("#example-loader").find(":selected").value().asInstanceOf[String]
+      var pid = getCurrentProblemId()
       if (pid == "")
         notification("Problem not selected!", "error")
       else {
@@ -877,7 +961,7 @@ object GrammarApp extends JSApp {
 
     $("#button-abort").click((event: JQueryEventObject) => {
       eventTitle = "Abort"
-      var extype = $("#exercise-select").find(":selected").value().asInstanceOf[String]
+      var extype = getCurrentExerciseId()
       if (extype == "")
         notification("Select the exercise that you were solving!", "error")
       else {
@@ -887,7 +971,7 @@ object GrammarApp extends JSApp {
     })
 
     def doHelp() {
-      var extype = $("#exercise-select").find(":selected").value().asInstanceOf[String]
+      var extype = getCurrentExerciseId()
       if (extype == "")
         notification("Select the exercise for which you want help!", "error")
       else {
@@ -904,10 +988,10 @@ object GrammarApp extends JSApp {
     $("#button-ll1").click(((self: Element, event: JQueryEventObject) => {
       eventTitle = "LL1 check"
       if (!$(self).hasClass("disabled")) {
-        var currentCode = editor.getValue()
+        val currentCode = editor.getValue()
         //first save the state
         save(currentCode)
-        var msg = JSON.stringify(
+        val msg = JSON.stringify(
           l(action = "checkLL1", code = currentCode)
         )
         leonSocket.send(msg)
@@ -918,7 +1002,7 @@ object GrammarApp extends JSApp {
     $("#button-amb").click(((self: Element, event: JQueryEventObject) => {
       eventTitle = "Ambiguity check"
       if (!$(self).hasClass("disabled")) {
-        var currentCode = editor.getValue()
+        val currentCode = editor.getValue()
         //first save the state
         save(currentCode)
         var msg = JSON.stringify(
@@ -933,8 +1017,8 @@ object GrammarApp extends JSApp {
       eventTitle = "Solve event"
       if (!$(self).hasClass("disabled")) {
         //get "id" of the selected problem
-        var exid = $("#exercise-select").find(":selected").value().asInstanceOf[String]
-        var pid = $("#example-loader").find(":selected").value().asInstanceOf[String]
+        var exid = getCurrentExerciseId()
+        var pid = getCurrentProblemId()
         if (exid == "")
           notification("Excercise not selected!", "error")
         if (pid == "")
@@ -949,7 +1033,7 @@ object GrammarApp extends JSApp {
       }
       event.preventDefault()
     }): js.ThisFunction)
-  })
+  }
 
 
   def main(): Unit = {

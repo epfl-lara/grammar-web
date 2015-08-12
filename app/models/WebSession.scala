@@ -7,6 +7,7 @@ import akka.actor._
 import grammar.CFGrammar.{Nonterminal, Terminal}
 import grammar.Shared._
 import grammar._
+import grammar.exercises.ExerciseType.ExType
 import grammar.exercises.{ExerciseType, _}
 import parsing.CYKParser
 import play.api.Play.current
@@ -15,7 +16,9 @@ import play.api.libs.iteratee._
 import play.api.libs.json.Json._
 import play.api.libs.json.Writes._
 import play.api.libs.json._
+import play.twirl.api.HtmlFormat
 
+import scala.collection.mutable.{ArrayBuffer, ListBuffer}
 import scala.concurrent._
 import scala.util.{Failure, Success}
 
@@ -181,7 +184,7 @@ class WebSession(remoteIP: String) extends Actor {
             //clear the currentOps
             currentOp = None
             //enable disabled events. However, do not enable more than allowed by the context
-            val exid = (msg \ "exerciseId").as[String].toInt
+            val exid = (msg \ "exerciseId").as[String]
             val exType = ExerciseType.getExType(exid)
             exType match {
               case Some(ExerciseType.GrammarEx) =>
@@ -201,20 +204,21 @@ class WebSession(remoteIP: String) extends Actor {
             if (!bnf.isDefined)
               clientLog("Parse Error: " + errstr)*/
           case GET_EXERCISE_TYPES =>
-            //read all exercises and send their names and ids to the clients                        
-            val data = ExerciseType.allExercises.map(exType =>
-              (exType.id.toString -> toJson(exType.toString))).toMap
+            //read all exercises and send their names and ids to the clients
+            case class ReturnResult(key: String, title: String)
+            val data = (ExerciseType.allExercises ++ (Admin.moreExerciseTypes)).zipWithIndex.map(exType =>
+              exType._2.toString -> toJson(Map("key" -> exType._1.key, "title" -> exType._1.toString))).toMap
             event(EXERCISE_TYPES, data)
 
           case GET_PROBLEM_LIST =>
             //read all problems in the grammar database that suit the exercise selected
             //and send their names and ids to the clients
-            val exid = (msg \ "exerciseId").as[String].toInt
-            val exType = ExerciseType.getExType(exid)
+            val exid = (msg \ EXERCISE_ID).as[String]
+            val exType = ExerciseType.getExType(exid).orElse(Admin.extractExType(exid))
             if (exType.isDefined) {
               val grammarEntries = grammarDB.db.entriesForExercise(exType.get)
               //send all grammarEntries
-              val data = generateProblemList(grammarEntries).map { case (k, v) => (k -> toJson(v)) }.toMap
+              val data = generateProblemList(grammarEntries).map { case (k, v) => k -> toJson(v) }.toMap
               event(PROBLEMS, data)
               exType.get match {
                 //leave doCheck untouched
@@ -222,23 +226,39 @@ class WebSession(remoteIP: String) extends Actor {
                 case _ => disableEvents(List(GET_HINTS, NORMALIZE))
               }
             } else {
+
               //log error message
               clientLog("Exercise with id: " + exid + " does not exist")
             }
 
           case LOAD_EXERCISE =>
-            val pid = (msg \ "problemId").as[String].toInt
+            val pid = (msg \ PROBLEM_ID).as[String].toInt
             val data = grammarDB.db.grammarEntries.find(_.id == pid) match {
               case None =>
-                Map("desc" -> toJson("There is no grammar in the database with the given id: " + pid))
+                Map(EXERCISE_DESC.desc -> toJson("There is no grammar in the database with the given id: " + pid))
               case Some(gentry) =>
-                val exid = (msg \ "exerciseId").as[String].toInt
-                val extype = ExerciseType.getExType(exid)
+                val exid = (msg \ EXERCISE_ID).as[String]
+                val extype = ExerciseType.getExType(exid).orElse(Admin.extractExType(exid))
                 //clientLog("Exercise ID: "+exid+" grammar: "+gentry.reference)
                 if (extype.isDefined) {
                   val (intro, desc, initialGrammar) = generateProblemStatement(gentry, extype.get)
                   val data = Map(EXERCISE_DESC.intro -> toJson(intro), EXERCISE_DESC.desc -> toJson(desc)) ++
-                    (if (adminMode) Map(EXERCISE_DESC.reference -> toJson(gentry.refGrammar.toString)) else Map.empty[String, JsValue])
+                    (if (adminMode) Map(
+                      SAVE.ALL_USE_CASES -> toJson((("all;All except '"+ExerciseType.ProgLangEx+"'")::
+                        ("nogrammar;All except '"+ExerciseType.GrammarEx+"' and '"+ExerciseType.ProgLangEx+"'")::
+                        ExerciseType.allExercises.map(e => e.key+";"+e.toString)).mkString("\n")),
+                      SAVE.usecases -> toJson(gentry.usecases.mkString("\n")),
+                      SAVE.reference -> toJson(gentry.refGrammar.toString),
+                      SAVE.title -> toJson(gentry.name),
+                      SAVE.description -> toJson(gentry.desc)
+                    ) ++
+                      (gentry.initGrammar match {
+                        case Some(init) => Map(SAVE.initial -> toJson(init.toString))
+                        case None => Nil})  ++
+                      (gentry.word match {
+                        case Some(word) => Map(SAVE.word -> toJson(word.map(_.toString).mkString(" ")))
+                        case None => Nil})
+                    else Nil)
                   event(EXERCISE_DESC, data)
                   //some problems have an initial answer that the users have to refine 
                   if (initialGrammar.isDefined) {
@@ -250,39 +270,55 @@ class WebSession(remoteIP: String) extends Actor {
                   clientLog("Exercise with id: " + exid + " does not exist")
             }
           case SAVE_GRAMMAR =>
-            val pid = (msg \ PROBLEM_ID).as[String].toInt
-            val what = (msg \ WHAT).as[String].split(",")
-            val data = grammarDB.db.grammarEntries.find(_.id == pid) match {
-              case None =>
-                Map("desc" -> toJson("There is no grammar to override in the database with the given id: " + pid))
-              case Some(gentry) =>
-                val updated_gentry = (gentry /: what) {
-                  case (g, SAVE.title) => g.copy(name = (msg \ SAVE.title).as[String])
-                  case (g, SAVE.description) => g.copy(desc = (msg \ SAVE.description).as[String])
-                  case (g, SAVE.reference) =>
-                    val (referenceOpt, error) = (new GrammarParser).parseGrammarContent((msg \ SAVE.reference).as[String])
-                    referenceOpt match {
-                      case None => clientLog("The grammar cannot parse. " + error); g
-                      case Some(reference) =>  g.copy(reference = reference).setToExportReference()
-                    }
-                  case (g, SAVE.initial) =>
-                    val (initialOpt, error) = (new GrammarParser).parseGrammarContent((msg \ SAVE.initial).as[String])
-                    initialOpt match {
-                      case None => clientLog("The grammar cannot parse. " + error); g
-                      case Some(initial) =>  g.copy(initGrammar=Some(initial)).setToExportInitGrammar()
-                    }
-                  case (g, SAVE.word) =>
-                    val parseWord = (msg \ SAVE.word).as[String]
-                    ExerciseType.parseWord(List(parseWord), g.reference) match {
-                      case Left(error) => clientLog("The given word cannot parse. " + error); g
-                      case Right(words) =>
-                        g.copy(word = Some(words))
-                    }
-                  case (g, _) => g
-                }
-                grammarDB.db = grammarDB.db.updated(gentry.id)(_ => updated_gentry)
-                GrammarDatabase.writeGrammarDatabase(grammarDB.db)
-                clientLog("New description stored for this grammar")
+            if(adminMode) {
+              val pid = (msg \ PROBLEM_ID).as[String].toInt
+              val what = (msg \ WHAT).as[String].split(",")
+              val data = grammarDB.db.grammarEntries.find(_.id == pid) match {
+                case None =>
+                  Map("desc" -> toJson("There is no grammar to override in the database with the given id: " + pid))
+                case Some(gentry) =>
+                  val updatedFields = ArrayBuffer[String]()
+                  val updated_gentry = (gentry /: what) {
+                    case (g, SAVE.usecases) =>
+                      val newUseCases = (msg \ SAVE.usecases).as[String]
+                      updatedFields += ("Title saved. Previous value:\n" + g.usecases.mkString(",") + "\nNew value:\n" + newUseCases)
+                      g.copy(usecases = newUseCases.split(","))
+                    case (g, SAVE.title) =>
+                      updatedFields += ("Title saved. Previous value:\n" + g.name)
+                      g.copy(name = (msg \ SAVE.title).as[String])
+                    case (g, SAVE.description) =>
+                      updatedFields += ("Description saved. Previous value:\n" + g.desc)
+                      g.copy(desc = (msg \ SAVE.description).as[String])
+                    case (g, SAVE.reference) =>
+                      val (referenceOpt, error) = (new GrammarParser).parseGrammarContent((msg \ SAVE.reference).as[String])
+                      referenceOpt match {
+                        case None => clientLog("The grammar cannot parse. " + error); g
+                        case Some(reference) =>
+                          updatedFields += ("Reference grammar for " + g.name + " saved")
+                          g.copy(reference = reference).setToExportReference()
+                      }
+                    case (g, SAVE.initial) =>
+                      val (initialOpt, error) = (new GrammarParser).parseGrammarContent((msg \ SAVE.initial).as[String])
+                      initialOpt match {
+                        case None => clientLog("The grammar cannot parse. " + error); g
+                        case Some(initial) =>
+                          updatedFields += ("Initial grammar for " + g.name + " saved")
+                          g.copy(initGrammar = Some(initial)).setToExportInitGrammar()
+                      }
+                    case (g, SAVE.word) =>
+                      val parseWord = (msg \ SAVE.word).as[String]
+                      ExerciseType.parseWord(List(parseWord), g.reference) match {
+                        case Left(error) => clientLog("The given word cannot parse. " + error); g
+                        case Right(words) =>
+                          updatedFields += (s"Word '$parseWord' for " + g.name + " saved")
+                          g.copy(word = Some(words))
+                      }
+                    case (g, _) => g
+                  }
+                  grammarDB.db = grammarDB.db.updated(gentry.id)(_ => updated_gentry)
+                  GrammarDatabase.writeGrammarDatabase(grammarDB.db)
+                  clientLog(updatedFields mkString "\n")
+              }
             }
           case DO_CHECK =>
             val pid = (msg \ "problemId").as[String].toInt
@@ -290,7 +326,7 @@ class WebSession(remoteIP: String) extends Actor {
               case None =>
                 clientLog("There is no grammar in the database with the given id: " + pid)
               case Some(gentry) =>
-                val exid = (msg \ "exerciseId").as[String].toInt
+                val exid = (msg \ "exerciseId").as[String]
                 val extype = ExerciseType.getExType(exid)
                 if (extype.isDefined) {
                   val userAnswer = (msg \ "code").as[String]
@@ -371,7 +407,7 @@ class WebSession(remoteIP: String) extends Actor {
             }
 
           case GET_HELP =>
-            val exid = (msg \ "exerciseId").as[String].toInt
+            val exid = (msg \ "exerciseId").as[String]
             val extype = ExerciseType.getExType(exid)
             if (extype.isDefined) {
               val data = Map(MESSAGE -> toJson(helpMesage(extype.get)))
@@ -389,7 +425,7 @@ class WebSession(remoteIP: String) extends Actor {
                 case None =>
                   clientLog("There is no grammar in the database with the selected id: " + pid)
                 case Some(gentry) =>
-                  val exid = (msg \ "exerciseId").as[String].toInt
+                  val exid = (msg \ "exerciseId").as[String]
                   val extype = ExerciseType.getExType(exid)
                   if (extype.isDefined) {
                     val userAnswer = (msg \ "code").as[String]
@@ -423,6 +459,15 @@ class WebSession(remoteIP: String) extends Actor {
       clientError("Unknown message: " + msg)(0)
   }
 
+  protected object Admin {
+    def moreExerciseTypes: Iterable[ExType] = {
+      if (adminMode) Some(ExerciseType.AllGrammarsEx) else None
+    }
+    def extractExType(exid: String): Option[ExType] = {
+      if (adminMode) ExerciseType.ExType.unapply(exid) else None
+    }
+  }
+
   import grammar._
   import BNFConverter._
   import CFGrammar._
@@ -449,7 +494,10 @@ class WebSession(remoteIP: String) extends Actor {
   //the problem statement
   var wordForDerivation: Option[Word] = None
 
-  def generateProblemList(gentries: Seq[GrammarEntry]): Seq[(String, String)] = {
+  type ProblemID = String
+  type ProblemName = String
+
+  def generateProblemList(gentries: Seq[GrammarEntry]): Seq[(ProblemID, ProblemName)] = {
     //track the number of problems with the same name
     var seenNames = Set[String]()
     def getUniqueName(name: String, index: Int = 1): String = {
@@ -464,7 +512,7 @@ class WebSession(remoteIP: String) extends Actor {
     gentries.map(ge => {
       val newname = getUniqueName(ge.name)
       seenNames += newname
-      (ge.id.toString -> newname)
+      ge.id.toString -> newname
     })
   }
 
@@ -494,6 +542,8 @@ class WebSession(remoteIP: String) extends Actor {
   }
 
   def generateProblemStatement(gentry: GrammarEntry, extype: ExType): (String, String, Option[BNFGrammar]) = extype match {
+    case AllGrammarsEx =>
+      ("Description of the grammar:", gentry.desc, gentry.initGrammar)
     case GrammarEx if gentry.isLL1Entry =>
       ("Provide an LL(1) grammar for ", gentry.desc, gentry.initGrammar)
     case GrammarEx =>
