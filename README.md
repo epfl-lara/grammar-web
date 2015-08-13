@@ -28,7 +28,7 @@ If you plan to work on the javascript source, run inside another shell:
 This will ensure that sources are recompiled each time.
 
 
-## Developing and debugging in branch scala-js-grammar-edit
+## Developing and debugging in branch `scala-js-grammar-edit`
 
 ### Setting up SBT
 
