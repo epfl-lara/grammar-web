@@ -682,48 +682,59 @@ object GrammarApp extends JSApp {
     def renderDescription(data: HandlerDataArgument): Unit = {
       $("#desc").empty()
       import AdminMode._
-
+      val referenceKey = "reference"
+      val initialKey = "initial"
+      case class ExerciseDescriptionBackend($: BackendScope[HandlerDataArgument, GrammarSave]) {
+        protected val _referenceButton = Ref.to(adminButton, referenceKey)
+        protected val _initialButton = Ref.to(adminButton, initialKey)
+        def referenceButton = _referenceButton($)
+        def initialButton = _initialButton($)
+        def setGrammarSaveMode(g: GrammarSave) = {
+          js.timers.setTimeout(timeWindow + 500)(grammarSave = g)
+          $.setState(g)
+        }
+      }
       val exercise_description =
         ReactComponentB[HandlerDataArgument]("Exercise description")
-          .render(P =>
+          .initialState(GrammarSave.None: GrammarSave)
+          .backend(ExerciseDescriptionBackend)
+          .render((P, S, B) =>
           <.div(
           <.h3(
             ^.`class` := "std-background",
             <.i(^.`class` := "icon-book"),
-            " Description:"
-          ),
+            " Description:"),
           <.div(
             id := "desc-space",
             admin ?= <.span(<.b("Title:"),
               AdminMode.EditableField(P.title, saveGrammarProperty(SAVE.title)).build,
               <.br(),
               <.b("Edit grammars: "),
-              adminButton.withKey("reference")(("reference", () => {
-                grammarSave = GrammarSave.Reference
-                replaceGrammar(data.reference)})),
-              adminButton.withKey("initial")(("initial", () => {
-                grammarSave = GrammarSave.Initial
-                replaceGrammar(data.initial.get)})),
-              adminButton(("exit", () => grammarSave = GrammarSave.None)),
+              adminButton.withKey(referenceKey)(AdminButton("reference", () => {
+                B.setGrammarSaveMode(GrammarSave.Reference)
+                grammarSave = GrammarSave.None
+                replaceGrammar(P.reference)}, selected = S == GrammarSave.Reference)),
+              adminButton.withKey(initialKey)(AdminButton("initial", () => {
+                B.setGrammarSaveMode(GrammarSave.Initial)
+                val initGrammar = if(P.initial.isDefined) P.initial.get else ""
+                grammarSave = GrammarSave.None
+                replaceGrammar(initGrammar)
+              }, selected = S == GrammarSave.Initial)),
+              adminButton(AdminButton("exit", () => {
+                addFeedback("Exiting grammar save mode")
+                B.setGrammarSaveMode(GrammarSave.None)})),
               <.br()
             ),
             admin ?= <.b("Exercise intro:"),
             P.intro,
             admin ?= <.br(),
             admin ?= <.b("Description:"),
-            admin ?= <.input(^.`class` := "admin-button", ^.`type` := "button", ^.value:="save", ^.onClick  ==> saveGrammarProperty(SAVE.description)),
-            <.span(
+            !admin ?= <.span(
               id := "desc-desc",
               admin ?= (^.`class` := "admin-editable"),
               dangerouslySetInnerHtml(if(admin) P.description else P.desc)
             ),
-            admin ?= <.pre(
-              id     := "desc-edit",
-              ^.`class` := "admin-editable",
-              ^.contentEditable := true,
-              ^.display := "none",
-              P.desc
-            ),
+            admin ?=  AdminMode.EditableField(P.description, saveGrammarProperty(SAVE.description), multiline = true).build,
             admin ?= <.br(),
             admin ?= <.span(
               <.b("Word:"),

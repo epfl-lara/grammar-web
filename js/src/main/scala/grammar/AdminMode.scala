@@ -16,19 +16,32 @@ object AdminMode {
 
   val fieldInputKey = "fieldInput"
 
-  val adminButton = ReactComponentB[(String, () => Unit)]("Open reference grammar button")
-    .render(data =>
-    <.input(^.`class` := "admin-button", ^.`type` := "button", ^.value:=data._1, ^.onClick --> {
-      data._2()
-    }))
+  case class AdminButton(text: String, onClick: () => Unit, selected: Boolean = false)
+  case class AdminButtonState(selected: Boolean = false)
+  case class AdminButtonBackend($: BackendScope[AdminButton, AdminButtonState]) {
+    def select(b: Boolean = true) = $.setState(AdminButtonState(b))
+  }
+  val adminButton = ReactComponentB[AdminButton]("Open reference grammar button")
+    .initialStateP(P => AdminButtonState(P.selected))
+    .backend(AdminButtonBackend)
+    .render((P, S, B) => {
+      <.input(
+        ^.classSet1("admin-button",
+          "admin-button-selected" -> P.selected),
+          ^.`type` := "button",
+      ^.value := P.text,
+      ^.onClick --> {
+        P.onClick()
+      })
+    })
     .build
 
   case class EditableState(value: String, savedValue: String)
-  case class EditableFieldInput(onBlur: () => Unit, display: Boolean, value: String, onChange: String => Unit) {
+  case class EditableFieldInput(onBlur: () => Unit, display: Boolean, value: String, onChange: String => Unit, multiline: Boolean) {
     def build = editableFieldInput(this)
     def build(modifiers: (editableFieldInput.type => editableFieldInput.type)) = modifiers(editableFieldInput)(this)
   }
-  class EditableBackend($: BackendScope[EditableFieldInput, EditableState]) {
+  case class EditableBackend($: BackendScope[EditableFieldInput, EditableState]) {
     def setContent(value: String) = {
       $.modState((s: EditableState) => s.copy(value = value))
 
@@ -49,9 +62,9 @@ object AdminMode {
   }
   val editableFieldInput = ReactComponentB[EditableFieldInput]("input text for a field")
     .initialStateP((props: EditableFieldInput) => EditableState(props.value, props.value))
-    .backend(new EditableBackend(_))
+    .backend(EditableBackend)
     .render((P, S, B) => {
-    <.input(^.`class` := "admin-editable editable-part",
+    (if(P.multiline) <.textarea else <.input)(^.`class` := "admin-editable editable-part",
     ^.`type` := "text",
     ^.onChange ==> ((e: ReactEventI) => {B.onChange(e); P.onChange(e.target.value)}),
     ^.onBlur --> P.onBlur(),
@@ -59,18 +72,18 @@ object AdminMode {
     ^.value := S.value
   )}).build
 
-  case class State(edit: Boolean, description: String)
-  case class EditableField(description: String, onSave: (String => Unit)) {
+  case class EditableFieldState(edit: Boolean, description: String)
+  case class EditableField(description: String, onSave: (String => Unit), multiline: Boolean = false) {
     def build = editableField(this)
     def build(modifiers: (editableField.type => editableField.type)) = modifiers(editableField)(this)
   }
-  class Backend($: BackendScope[EditableField, State]) {
+  case class EditableFieldBackend($: BackendScope[EditableField, EditableFieldState]) {
     protected val _fieldInput = Ref.to(editableFieldInput, fieldInputKey)
     def fieldInput = _fieldInput($)
     var changeTimer: js.timers.SetTimeoutHandle = null
 
     def onChange(e: String) = {
-      $.modState((s: State) => s.copy(description = e), () => {
+      $.modState((s: EditableFieldState) => s.copy(description = e), () => {
         js.timers.clearTimeout(changeTimer)
         changeTimer = js.timers.setTimeout(1000){
           save()
@@ -78,7 +91,7 @@ object AdminMode {
       })
     }
 
-    def goToEditMode() = $.modState((s: State) => s.copy(edit = true), () => {
+    def goToEditMode() = $.modState((s: EditableFieldState) => s.copy(edit = true), () => {
       fieldInput.tryFocus()
     })
     def save() = {
@@ -91,12 +104,12 @@ object AdminMode {
 
     def goFromEditMode() = {
       save()
-      $.modState((s: State) => s.copy(edit = false))
+      $.modState((s: EditableFieldState) => s.copy(edit = false))
     }
   }
   private val editableField = ReactComponentB[EditableField]("Editable span")
-    .initialStateP( props => State(edit=false, props.description))
-    .backend(new Backend(_))
+    .initialStateP( props => EditableFieldState(edit=false, props.description))
+    .backend(EditableFieldBackend)
     .render( (P, S, B) =>
       <.span(
         <.span(
@@ -110,7 +123,8 @@ object AdminMode {
           onBlur = B.goFromEditMode,
           display = S.edit,
           value = P.description,
-          onChange = B.onChange
+          onChange = B.onChange,
+          multiline = P.multiline
         ))
         /*adminButton(("save", () => {
           val value = B.fieldInput.get.state.value
@@ -129,7 +143,7 @@ object AdminMode {
     def build = useCasesChecks(this)
   }
   case class UseCasesChecksState(use_cases: Array[String])
-  class UseCasesChecksBackend($: BackendScope[UseCasesChecks, UseCasesChecksState]) {
+  case class UseCasesChecksBackend($: BackendScope[UseCasesChecks, UseCasesChecksState]) {
     def isAllUseCases(use_cases: Array[String] =  $.state.use_cases): Boolean = {
       val uscontains = use_cases.indexOf(_: String) > -1
       !uscontains("proglang") && (uscontains("all") || $.props.all_usecases.forall{
@@ -185,7 +199,7 @@ object AdminMode {
   }
   val useCasesChecks = ReactComponentB[UseCasesChecks]("Use case checkboxes")
     .initialStateP( props => UseCasesChecksState(props.use_cases))
-    .backend(new UseCasesChecksBackend(_))
+    .backend(UseCasesChecksBackend)
     .render{  (P, S, B) => {
     val use_cases = S.use_cases
     val all_use_cases = B.isAllUseCases()

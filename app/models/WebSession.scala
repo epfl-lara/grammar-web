@@ -304,13 +304,16 @@ class WebSession(remoteIP: String) extends Actor {
                   updatedFields += ("Description saved."+(if(g.desc != "") " Previous value:\n" + g.desc else ""))
                   g.copy(desc = (msg \ SAVE.description).as[String])
                 case (g, SAVE.reference) =>
-                  val (referenceOpt, error) = (new GrammarParser).parseGrammarContent((msg \ SAVE.reference).as[String])
-                  referenceOpt match {
-                    case None => clientLog("The grammar cannot parse. " + error); g
-                    case Some(reference) =>
-                      updatedFields += ("Reference grammar for " + g.name + " saved")
-                      g.copy(reference = reference).setToExportReference()
-                  }
+                  val newReference = (msg \ SAVE.reference).as[String]
+                  val (referenceOpt, error) = (new GrammarParser).parseGrammarContent(newReference)
+                    referenceOpt match {
+                      case None => clientLog("The grammar cannot parse. " + error); g
+                      case Some(reference) =>
+                        if(newReference != reference) {
+                          updatedFields += ("Reference grammar for " + g.name + " saved")
+                          g.copy(reference = reference).setToExportReference()
+                        } else g
+                    }
                 case (g, SAVE.word) =>
                   val parseWord = (msg \ SAVE.word).as[String]
                   if(parseWord == "") {
@@ -345,7 +348,8 @@ class WebSession(remoteIP: String) extends Actor {
               }
               grammarDB.db = grammarDB.db.updated(updated_gentry)
               GrammarDatabase.writeGrammarDatabase(grammarDB.db)
-              clientLog(updatedFields mkString "\n")
+              val toTell = updatedFields mkString "\n"
+              if(toTell != "")  clientLog(toTell)
             }
           case DO_CHECK =>
             val pid = (msg \ "problemId").as[String].toInt

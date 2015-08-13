@@ -33,7 +33,13 @@ div#title {
 }
 
 .admin-editable {
-    outline: 2px dashed blue
+      outline: 1px dashed blue;
+      -moz-box-shadow: 3px 3px 5px #656565;
+      -webkit-box-shadow: 3px 3px 5px #656565;
+      -o-box-shadow: 3px 3px 5px #656565;
+      box-shadow: 3px 3px 5px #656565;
+      margin-bottom: 3px;
+      margin-right: 3px;
 }
 
 .admin-button {
@@ -42,6 +48,10 @@ div#title {
   border-radius: 0.5em;
   margin-left: 0.2em;
   margin-right: 0.3em;
+}
+
+.admin-button-selected {
+  background: orange;
 }
 
 i {
