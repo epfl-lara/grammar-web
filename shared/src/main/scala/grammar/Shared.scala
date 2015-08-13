@@ -80,4 +80,4 @@ object Shared {
   }
   val MESSAGE = "message"
 
- }
+}

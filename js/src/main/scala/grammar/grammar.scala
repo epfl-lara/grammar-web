@@ -1,5 +1,6 @@
 package grammar
 
+import _root_.grammar.adminmode.{UseCasesChecks, EditableField, AdminMode}
 import japgolly.scalajs.react.vdom.Attr
 
 import scala.scalajs.js
@@ -685,10 +686,6 @@ object GrammarApp extends JSApp {
       val referenceKey = "reference"
       val initialKey = "initial"
       case class ExerciseDescriptionBackend($: BackendScope[HandlerDataArgument, GrammarSave]) {
-        protected val _referenceButton = Ref.to(adminButton, referenceKey)
-        protected val _initialButton = Ref.to(adminButton, initialKey)
-        def referenceButton = _referenceButton($)
-        def initialButton = _initialButton($)
         def setGrammarSaveMode(g: GrammarSave) = {
           js.timers.setTimeout(timeWindow + 500)(grammarSave = g)
           $.setState(g)
@@ -707,22 +704,22 @@ object GrammarApp extends JSApp {
           <.div(
             id := "desc-space",
             admin ?= <.span(<.b("Title:"),
-              AdminMode.EditableField(P.title, saveGrammarProperty(SAVE.title)).build,
+              adminmode.EditableField(P.title, saveGrammarProperty(SAVE.title)).build,
               <.br(),
               <.b("Edit grammars: "),
-              adminButton.withKey(referenceKey)(AdminButton("reference", () => {
+              adminmode.Button("reference", () => {
                 B.setGrammarSaveMode(GrammarSave.Reference)
                 grammarSave = GrammarSave.None
-                replaceGrammar(P.reference)}, selected = S == GrammarSave.Reference)),
-              adminButton.withKey(initialKey)(AdminButton("initial", () => {
+                replaceGrammar(P.reference)}, selected = S == GrammarSave.Reference).buildWithKey(referenceKey),
+              adminmode.Button("initial", () => {
                 B.setGrammarSaveMode(GrammarSave.Initial)
                 val initGrammar = if(P.initial.isDefined) P.initial.get else ""
                 grammarSave = GrammarSave.None
                 replaceGrammar(initGrammar)
-              }, selected = S == GrammarSave.Initial)),
-              adminButton(AdminButton("exit", () => {
+              }, selected = S == GrammarSave.Initial).buildWithKey(initialKey),
+              adminmode.Button("exit", () => {
                 addFeedback("Exiting grammar save mode")
-                B.setGrammarSaveMode(GrammarSave.None)})),
+                B.setGrammarSaveMode(GrammarSave.None)}).build,
               <.br()
             ),
             admin ?= <.b("Exercise intro:"),
@@ -734,16 +731,16 @@ object GrammarApp extends JSApp {
               admin ?= (^.`class` := "admin-editable"),
               dangerouslySetInnerHtml(if(admin) P.description else P.desc)
             ),
-            admin ?=  AdminMode.EditableField(P.description, saveGrammarProperty(SAVE.description), multiline = true).build,
+            admin ?=  EditableField(P.description, saveGrammarProperty(SAVE.description), multiline = true).build,
             admin ?= <.br(),
             admin ?= <.span(
               <.b("Word:"),
-              AdminMode.EditableField( if(!js.isUndefined(P.asInstanceOf[js.Dynamic].word)) P.word else "", saveGrammarProperty(SAVE.word)).build,
+              EditableField( if(!js.isUndefined(P.asInstanceOf[js.Dynamic].word)) P.word else "", saveGrammarProperty(SAVE.word)).build,
               <.br()
             ),
             admin ?= <.span(
               <.b("Use cases:"),
-              AdminMode.UseCasesChecks({
+              UseCasesChecks({
                 all_use_cases = P.all_usecases.get
                 all_use_cases.asInstanceOf[String].split("\n").map { v => {
                   val splitted = v.split(";")
