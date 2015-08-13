@@ -18,6 +18,7 @@ object Shared {
   val ALL_GRAMMARS_ID = "all_grammars"
 
   /* In-Server events */
+  val DELETE_PROBLEM = "delete_problem"
   val ADMIN_MODE = "adminMode"
   val HELLO = "hello"
   val ABORT_OPS = "abortOps"
@@ -40,8 +41,9 @@ object Shared {
     val initial = "initial"
     val word = "word"
     val usecases = "usecases"
-    val ALL_USE_CASES = "all_usecases"
   }
+  val ALL_USE_CASES = "all_usecases"
+  val NEW_PROBLEM_ID = "new_problem_id"
 
   /* Out-server events */
   val CONSOLE = "console"

@@ -14,6 +14,7 @@ import org.scalajs.dom._
 import japgolly.scalajs.react.vdom.prefix_<^._
 import japgolly.scalajs.react.vdom.all.{id, dangerouslySetInnerHtml}
 import japgolly.scalajs.react._
+
 trait HandlerDataArgument extends js.Any {
   var kind: String = js.native
   val reference: String = js.native
@@ -25,11 +26,13 @@ trait HandlerDataArgument extends js.Any {
   var intro: String = js.native
   var desc: String = js.native // Contains the user-shown description of the problem.
   var description: String = js.native // contains the grammar description
-  var initial: String = js.native
+  var initial: js.UndefOr[String] = js.native
   var title: String = js.native
   var word: String = js.native
-  var usecases: String = js.native
-  var all_usecases: String = js.native
+  var usecases: js.UndefOr[String] = js.native
+
+  var all_usecases: js.UndefOr[String] = js.native
+  var new_problem_id: Int = js.native
 }
 
 object GrammarApp extends JSApp {
@@ -69,6 +72,7 @@ object GrammarApp extends JSApp {
   var eventTitle = "Output"
 
   var all_use_cases: String = ""
+  var new_problem_id: Int = 0
 
   /** Loads when the document is ready */
   $(document).ready(onDocumentReady _)
@@ -125,6 +129,8 @@ object GrammarApp extends JSApp {
   }
 
 
+  var grammarSave: GrammarSave = GrammarSave.None
+
   def onDocumentReady(): Unit = {
     println("Starting the script")
     val editor = ace.edit("codebox")
@@ -137,7 +143,9 @@ object GrammarApp extends JSApp {
     editor.setShowPrintMargin(false)
     editor.setAutoScrollEditorIntoView()
     editor.setHighlightActiveLine(false)
-    editor.getSession().setTabSize(2)
+
+    var editorSession = editor.getSession()
+    editorSession.setTabSize(2)
     
     if (getCookie(LICENCE_COOKIE) != LICENCE_COOKIE_ACCEPTED) {
       var dialogDiv = $("<div>").addClass("ui-dialog")
@@ -231,7 +239,7 @@ object GrammarApp extends JSApp {
       save(currentCode)
       if (connected) {
         var msg = JSON.stringify(
-          l(action = "doUpdateCode", code = currentCode)
+          l(action = DO_UPDATE_CODE, code = currentCode)
         )
         leonSocket.send(msg)
       }
@@ -289,6 +297,12 @@ object GrammarApp extends JSApp {
     }
 
     def storeCurrent(code: String) {
+      grammarSave match {
+        case GrammarSave.Initial =>   saveGrammarProperty(SAVE.initial)(code)
+        case GrammarSave.Reference => saveGrammarProperty(SAVE.reference)(code)
+        case GrammarSave.None =>
+      }
+
       forwardChanges = js.Array()
       if (backwardChanges.length >= 1) {
         if (code != backwardChanges(backwardChanges.length - 1)) {
@@ -318,8 +332,6 @@ object GrammarApp extends JSApp {
     }
 
     updateUndoRedo()
-
-    var editorSession = editor.getSession()
 
     /**
      * Compilation
@@ -455,17 +467,14 @@ object GrammarApp extends JSApp {
     handlers(PROBLEMS) = (data: HandlerDataArgument) => {
       $("#example-loader").empty()
       $("#example-loader").append($( """<option value="" selected="selected">--Select a problem--</option>"""))
-      $.each(data, (fld: js.Any, exerciseName: js.Any) => {
+      $.each(data, (fld: js.Any, problemName: js.Any) => {
         val field = fld.asInstanceOf[String]
         if (field != "kind") {
-          $("#example-loader").append($("<option></option>").value(field).html(exerciseName))
+          $("#example-loader").append($("<option></option>").value(field).html(problemName))
         }
         ().asInstanceOf[js.Any]
       })
       $("#example-loader").prop("disabled", false)
-      if(isAdminMode) {
-        $("#example-loader").append($("<input type=\"button\" value='Add new grammar'").click(addNewExercise _))
-      }
     }
 
     def loadExerciseTypes(): Unit = {
@@ -604,34 +613,69 @@ object GrammarApp extends JSApp {
       g.localStorage.setItem("editorCode", editor.getValue())
     }
 
-    def saveGrammar(e: ReactEventI): Unit = {
-      saveGrammarProperty(SAVE.description)($("#desc-edit").text())
-    }
-
-    def saveGrammarProperty(property: String)(value: String): Unit = {
-      val exid = $("#exercise-select").find(":selected").value()
-      val pid = $("#example-loader").find(":selected").value()
-      val msg = JSON.stringify(l(
+    def saveGrammar(properties: Seq[(String, js.Any)]): Unit = {
+      val pid = getCurrentProblemId()
+      val msg = JSON.stringify(l.applyDynamicNamed("apply")((Seq[(String, js.Any)](
         ACTION -> SAVE_GRAMMAR,
-        WHAT -> Seq(property).mkString(","),
-        PROBLEM_ID -> pid,
-        property -> value
-      ))
+        WHAT -> properties.map(_._1).mkString(","),
+        PROBLEM_ID -> pid
+      ) ++ properties) : _* ))
       leonSocket.send(msg)
     }
 
-    def addNewExercise() = {
+    def saveGrammarProperty(property: String)(value: String): Unit = {
+      saveGrammar(Seq[(String, js.Any)]((property, value)))
+      property match {
+        case SAVE.title =>
+          $("#example-loader option:selected").html(value)
+        case _ =>
+      }
+    }
+
+    def addNewProblem() = {
+      val title  ="<i>Problem title</i>"
+      val description ="<p>The description of your grammar here</p>"
+      val reference = "S -> a | a b S | \"\""
+      val initial = "S -> a"
+      val word = "a b a"
+      val usecases = "all"
+
+      val field = new_problem_id
+      new_problem_id += 1
+      $("#example-loader").append($("<option selected>").value(field.toString).html(title))
       renderDescription(l(
-        reference= "S -> a | a b S | \"\"",
+        reference= reference,
         intro= "[Computer-generated]",
         desc= "[Computer-generated]",
-        description= "The description of your grammar here",
-        initial= "S -> a",
-        title= "Problem title",
-        word= "a b a",
-        usecases= "all",
+        description = description,
+        initial= initial,
+        title= title,
+        word= word,
+        usecases= usecases,
         all_usecases = all_use_cases
       ).asInstanceOf[HandlerDataArgument])
+      saveGrammar(Seq[(String, js.Any)](
+        SAVE.title -> title,
+        SAVE.description -> description,
+        SAVE.reference -> reference,
+        SAVE.initial -> initial,
+        SAVE.word -> word,
+        SAVE.usecases -> usecases
+      ))
+    }
+
+    def deleteProblem(): Unit = {
+      val title = $("#example-loader option:selected").text()
+      val pid = getCurrentProblemId()
+      if(dom.confirm(s"Are you sure you want to delete problem #$pid '${title}'")) {
+        var msg = JSON.stringify(l(
+          ACTION -> DELETE_PROBLEM,
+          PROBLEM_ID -> pid
+        ))
+        leonSocket.send(msg)
+        $("#example-loader option:selected").remove()
+        $("#example-loader option:nth-child(1)").attr("selected", "true")
+      }
     }
 
     /** Renders the description of the exercise, plus admin stuff if needed*/
@@ -639,8 +683,6 @@ object GrammarApp extends JSApp {
       $("#desc").empty()
       import AdminMode._
 
-      def referenceButton = adminButton(("reference", () => replaceGrammar(data.reference)))
-      def initialButton = adminButton(("initial", () => replaceGrammar(data.asInstanceOf[js.Dynamic].initial)))
       val exercise_description =
         ReactComponentB[HandlerDataArgument]("Exercise description")
           .render(P =>
@@ -652,51 +694,57 @@ object GrammarApp extends JSApp {
           ),
           <.div(
             id := "desc-space",
-            isAdminMode ?= <.span(<.b("Title:"),
+            admin ?= <.span(<.b("Title:"),
               AdminMode.EditableField(P.title, saveGrammarProperty(SAVE.title)).build,
               <.br(),
-              <.b("Grammars: "),
-              referenceButton,
-              initialButton,
+              <.b("Edit grammars: "),
+              adminButton.withKey("reference")(("reference", () => {
+                grammarSave = GrammarSave.Reference
+                replaceGrammar(data.reference)})),
+              adminButton.withKey("initial")(("initial", () => {
+                grammarSave = GrammarSave.Initial
+                replaceGrammar(data.initial.get)})),
+              adminButton(("exit", () => grammarSave = GrammarSave.None)),
               <.br()
             ),
-            isAdminMode ?= <.b("Exercise intro:"),
+            admin ?= <.b("Exercise intro:"),
             P.intro,
-            isAdminMode ?= <.br(),
-            isAdminMode ?= <.b("Description:"),
-            isAdminMode ?= <.input(^.`class` := "admin-button", ^.`type` := "button", ^.value:="save", ^.onClick  ==> saveGrammar),
+            admin ?= <.br(),
+            admin ?= <.b("Description:"),
+            admin ?= <.input(^.`class` := "admin-button", ^.`type` := "button", ^.value:="save", ^.onClick  ==> saveGrammarProperty(SAVE.description)),
             <.span(
               id := "desc-desc",
-              isAdminMode ?= (^.`class` := "admin-editable"),
-              dangerouslySetInnerHtml(if(isAdminMode) P.description else P.desc)
+              admin ?= (^.`class` := "admin-editable"),
+              dangerouslySetInnerHtml(if(admin) P.description else P.desc)
             ),
-            isAdminMode ?= <.pre(
+            admin ?= <.pre(
               id     := "desc-edit",
               ^.`class` := "admin-editable",
               ^.contentEditable := true,
               ^.display := "none",
               P.desc
             ),
-            isAdminMode ?= <.span(
+            admin ?= <.br(),
+            admin ?= <.span(
               <.b("Word:"),
               AdminMode.EditableField( if(!js.isUndefined(P.asInstanceOf[js.Dynamic].word)) P.word else "", saveGrammarProperty(SAVE.word)).build,
               <.br()
             ),
-            isAdminMode ?= <.span(
+            admin ?= <.span(
               <.b("Use cases:"),
               AdminMode.UseCasesChecks({
-                all_use_cases = P.asInstanceOf[js.Dynamic].all_usecases
+                all_use_cases = P.all_usecases.get
                 all_use_cases.asInstanceOf[String].split("\n").map { v => {
                   val splitted = v.split(";")
                   (splitted(0), splitted(1))
                 }
                 }
-              }, P.asInstanceOf[js.Dynamic].usecases.split("\n"), saveGrammarProperty(SAVE.usecases)).build
+              }, P.usecases.get.split("\n"), saveGrammarProperty(SAVE.usecases)).build
             )
           )).render
       ).build
       React.render(exercise_description(data), $("#desc")(0).asInstanceOf[dom.Node])
-      if(isAdminMode) {
+      if(admin) {
         $("#desc-desc").click(() => {
           $("#desc-desc").hide()
           $("#desc-edit").show().focus()
@@ -716,6 +764,9 @@ object GrammarApp extends JSApp {
       $("#admin-login").html("")
       //display new buttons here
       $("#button-solve").html( """<i class="icon-thumbs-up"></i> <span>Solve</span>""")
+
+      all_use_cases = data.all_usecases.get
+      new_problem_id = data.new_problem_id
       // Re-renders some descriptions
       // TODO: Re-ask for the exercise.
       val exId = getCurrentExerciseId()
@@ -732,8 +783,10 @@ object GrammarApp extends JSApp {
         js.timers.setTimeout(1000)(loadExerciseFromId(exId, pid))
         js.timers.setTimeout(1000){ $(s"#example-loader option[value=$pid]").attr("selected", true) }
       }
+      $("#example-loader").parent()
+        .append($("<input type='button' class='admin-button' value='Add new'>").click(addNewProblem _))
+        .append($("<input type='button' class='admin-button' value='Delete'>").click(deleteProblem _))
 
-      //renderDescription($("#desc").data("received-data").asInstanceOf[HandlerDataArgument])
     }
 
     handlers(REJECT_ADMIN_ACCESS) = (data: HandlerDataArgument) => {
@@ -750,7 +803,7 @@ object GrammarApp extends JSApp {
       editor.selection.clearSelection()
     }
 
-    def isAdminMode(): Boolean = {
+    def admin(): Boolean = {
       $("#admin-mode").html() == ""
     }
 
@@ -814,7 +867,7 @@ object GrammarApp extends JSApp {
             success = (data: js.Dynamic, textStatus: String, jqXHR: JQueryXHR) => {
               if (data.status.asInstanceOf[String] == "success") {
                 storeCurrent(editorSession.getValue())
-                editor.setValue(data.code)
+                editor.setValue(data.code.asInstanceOf[js.UndefOr[String]].get)
                 editor.selection.clearSelection()
                 editor.gotoLine(0)
                 recompile()
@@ -877,10 +930,10 @@ object GrammarApp extends JSApp {
       replaceGrammar(data.grammar)
     }
 
-    var storedCode = g.localStorage.getItem("editorCode")
+    val storedCode  = g.localStorage.getItem("editorCode").asInstanceOf[js.UndefOr[String]]
 
-    if (storedCode != null) {
-      editor.setValue(storedCode)
+    if (storedCode.isDefined) {
+      editor.setValue(storedCode.get)
       editor.selection.clearSelection()
       editor.gotoLine(0)
     }
@@ -918,7 +971,7 @@ object GrammarApp extends JSApp {
       var pid = getCurrentProblemId()
       //var pid = $("#example-loader").find(":selected").val()
       if (exid == "")
-        notification("Excercise not selected!", "error")
+        notification("Exercise not selected!", "error")
       if (pid == "")
         notification("Problem not selected!", "error")
       else {

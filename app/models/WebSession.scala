@@ -170,7 +170,9 @@ class WebSession(remoteIP: String) extends Actor {
           case ADMIN_MODE =>
             if (AdminPassword.checkPassword((msg \ "password").as[String])) {
               adminMode = true
-              event(ENTER_ADMIN_MODE, Map())
+              event(ENTER_ADMIN_MODE,
+                Map(ALL_USE_CASES -> toJson(getAllUseCases),
+                  NEW_PROBLEM_ID -> toJson(grammarDB.db.grammarEntries.map(_.id).max + 1)))
             } else
               event(REJECT_ADMIN_ACCESS, Map())
 
@@ -244,9 +246,7 @@ class WebSession(remoteIP: String) extends Actor {
                   val (intro, desc, initialGrammar) = generateProblemStatement(gentry, extype.get)
                   val data = Map(EXERCISE_DESC.intro -> toJson(intro), EXERCISE_DESC.desc -> toJson(desc)) ++
                     (if (adminMode) Map(
-                      SAVE.ALL_USE_CASES -> toJson((("all;All except '"+ExerciseType.ProgLangEx+"'")::
-                        ("nogrammar;All except '"+ExerciseType.GrammarEx+"' and '"+ExerciseType.ProgLangEx+"'")::
-                        ExerciseType.allExercises.map(e => e.key+";"+e.toString)).mkString("\n")),
+                      ALL_USE_CASES -> toJson(getAllUseCases),
                       SAVE.usecases -> toJson(gentry.usecases.mkString("\n")),
                       SAVE.reference -> toJson(gentry.refGrammar.toString),
                       SAVE.title -> toJson(gentry.name),
@@ -269,56 +269,83 @@ class WebSession(remoteIP: String) extends Actor {
                 //log error message
                   clientLog("Exercise with id: " + exid + " does not exist")
             }
+          case DELETE_PROBLEM =>
+            if(adminMode) {
+              val pid = (msg \ PROBLEM_ID).as[String].toInt
+              clientLog(s"Problem #$pid '${grammarDB.db.grammarEntries.find(_.id == pid).map(_.name).getOrElse("")}' deleted")
+              grammarDB.db = grammarDB.db.deleted(pid)
+              GrammarDatabase.writeGrammarDatabase(grammarDB.db)
+            }
           case SAVE_GRAMMAR =>
             if(adminMode) {
               val pid = (msg \ PROBLEM_ID).as[String].toInt
               val what = (msg \ WHAT).as[String].split(",")
-              val data = grammarDB.db.grammarEntries.find(_.id == pid) match {
-                case None =>
-                  Map("desc" -> toJson("There is no grammar to override in the database with the given id: " + pid))
-                case Some(gentry) =>
-                  val updatedFields = ArrayBuffer[String]()
-                  val updated_gentry = (gentry /: what) {
-                    case (g, SAVE.usecases) =>
-                      val newUseCases = (msg \ SAVE.usecases).as[String]
-                      updatedFields += ("Title saved. Previous value:\n" + g.usecases.mkString(",") + "\nNew value:\n" + newUseCases)
-                      g.copy(usecases = newUseCases.split(","))
-                    case (g, SAVE.title) =>
-                      updatedFields += ("Title saved. Previous value:\n" + g.name)
-                      g.copy(name = (msg \ SAVE.title).as[String])
-                    case (g, SAVE.description) =>
-                      updatedFields += ("Description saved. Previous value:\n" + g.desc)
-                      g.copy(desc = (msg \ SAVE.description).as[String])
-                    case (g, SAVE.reference) =>
-                      val (referenceOpt, error) = (new GrammarParser).parseGrammarContent((msg \ SAVE.reference).as[String])
-                      referenceOpt match {
-                        case None => clientLog("The grammar cannot parse. " + error); g
-                        case Some(reference) =>
-                          updatedFields += ("Reference grammar for " + g.name + " saved")
-                          g.copy(reference = reference).setToExportReference()
-                      }
-                    case (g, SAVE.initial) =>
-                      val (initialOpt, error) = (new GrammarParser).parseGrammarContent((msg \ SAVE.initial).as[String])
-                      initialOpt match {
-                        case None => clientLog("The grammar cannot parse. " + error); g
-                        case Some(initial) =>
-                          updatedFields += ("Initial grammar for " + g.name + " saved")
-                          g.copy(initGrammar = Some(initial)).setToExportInitGrammar()
-                      }
-                    case (g, SAVE.word) =>
-                      val parseWord = (msg \ SAVE.word).as[String]
-                      ExerciseType.parseWord(List(parseWord), g.reference) match {
-                        case Left(error) => clientLog("The given word cannot parse. " + error); g
-                        case Right(words) =>
-                          updatedFields += (s"Word '$parseWord' for " + g.name + " saved")
-                          g.copy(word = Some(words))
-                      }
-                    case (g, _) => g
+              val updatedFields = ArrayBuffer[String]()
+              val gentry = grammarDB.db.grammarEntries.find(_.id == pid).getOrElse({
+                updatedFields += "New exercise created with id "+pid
+                val res = new GrammarEntry(
+                    id = pid,
+                    name = "",
+                    desc = "",
+                    reference = null,
+                    word = null,
+                    initGrammar = None,
+                    usecases = Array("all"),
+                    referenceFile = None,
+                    initialFile = None)
+                res
+              })
+              val updated_gentry = (gentry /: what) {
+                case (g, SAVE.title) =>
+                  val newTitle = (msg \ SAVE.title).as[String]
+                  updatedFields += (s"Title '$newTitle' saved." + (if(g.name != "") " Previous value:\n" + g.name else ""))
+                  g.copy(name = newTitle)
+                case (g, SAVE.description) =>
+                  updatedFields += ("Description saved."+(if(g.desc != "") " Previous value:\n" + g.desc else ""))
+                  g.copy(desc = (msg \ SAVE.description).as[String])
+                case (g, SAVE.reference) =>
+                  val (referenceOpt, error) = (new GrammarParser).parseGrammarContent((msg \ SAVE.reference).as[String])
+                  referenceOpt match {
+                    case None => clientLog("The grammar cannot parse. " + error); g
+                    case Some(reference) =>
+                      updatedFields += ("Reference grammar for " + g.name + " saved")
+                      g.copy(reference = reference).setToExportReference()
                   }
-                  grammarDB.db = grammarDB.db.updated(gentry.id)(_ => updated_gentry)
-                  GrammarDatabase.writeGrammarDatabase(grammarDB.db)
-                  clientLog(updatedFields mkString "\n")
+                case (g, SAVE.word) =>
+                  val parseWord = (msg \ SAVE.word).as[String]
+                  if(parseWord == "") {
+                    g.copy(word = None)
+                  } else {
+                    ExerciseType.parseWord(List(parseWord), g.reference) match {
+                      case Left(error) => clientLog("The given word cannot parse. " + error); g
+                      case Right(words) =>
+                        updatedFields += (s"Word '$parseWord' for " + g.name + " saved")
+                        g.copy(word = Some(words))
+                    }
+                  }
+                case (g, SAVE.initial) =>
+                  val newInitGrammar = (msg \ SAVE.initial).as[String]
+                  if(newInitGrammar == "") {
+                    g.copy(initGrammar = None).setToExportInitGrammar()
+                  } else {
+                    val (initialOpt, error) = (new GrammarParser).parseGrammarContent(newInitGrammar)
+                    initialOpt match {
+                      case None => clientLog("The grammar cannot parse. " + error); g
+                      case Some(initial) =>
+                        updatedFields += ("Initial grammar for " + g.name + " saved")
+                        g.copy(initGrammar = Some(initial)).setToExportInitGrammar()
+                    }
+                  }
+                case (g, SAVE.usecases) =>
+                  val newUseCases = (msg \ SAVE.usecases).as[String]
+                  val prevUseCases = g.usecases.mkString(",")
+                  updatedFields += (s"Use cases '$newUseCases' saved." + (if(newUseCases != prevUseCases) " Previous value:\n" + prevUseCases else ""))
+                  g.copy(usecases = newUseCases.split(","))
+                case (g, _) => g
               }
+              grammarDB.db = grammarDB.db.updated(updated_gentry)
+              GrammarDatabase.writeGrammarDatabase(grammarDB.db)
+              clientLog(updatedFields mkString "\n")
             }
           case DO_CHECK =>
             val pid = (msg \ "problemId").as[String].toInt
@@ -457,6 +484,12 @@ class WebSession(remoteIP: String) extends Actor {
 
     case msg =>
       clientError("Unknown message: " + msg)(0)
+  }
+
+  private def getAllUseCases: String = {
+    (("all;All except '" + ExerciseType.ProgLangEx + "'") ::
+      ("nogrammar;All except '" + ExerciseType.GrammarEx + "' and '" + ExerciseType.ProgLangEx + "'") ::
+      ExerciseType.allExercises.map(e => e.key + ";" + e.toString)).mkString("\n")
   }
 
   protected object Admin {

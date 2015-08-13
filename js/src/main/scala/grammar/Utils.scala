@@ -23,7 +23,7 @@ trait JQueryEventObjectExtended extends JQueryEventObject {
 object JQueryExtended {
   @inline implicit def toJQueryExtended(t: JQuery): JQueryExtended = t.asInstanceOf[JQueryExtended]
   @inline implicit def dynamicToBoolean(d: js.Dynamic): Boolean = d.asInstanceOf[Boolean]
-  @inline implicit def dynamicToString(d: js.Dynamic): String = d.asInstanceOf[String]
+  //@inline implicit def dynamicToString(d: js.Dynamic): String = d.asInstanceOf[String]
   //@inline implicit def dynamicToHandlerDataArgument(d: js.Dynamic): HandlerDataArgument = d.asInstanceOf[HandlerDataArgument]
 
   @inline implicit def toJQueryEventObjectExtended(t: JQueryEventObject) = t.asInstanceOf[JQueryEventObjectExtended]
