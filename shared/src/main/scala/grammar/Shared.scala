@@ -42,6 +42,13 @@ object Shared {
     val word = "word"
     val usecases = "usecases"
   }
+  object CYK_CHECK {
+    // receive or send in "solve" & "admin" mode.
+    val table = "table" // [start]-[end]:[Comma-separated nonterminals chosen by the student]\n....
+    // In response, you should send.
+    val table_feedback = "table_feedback" // [start]-[end]:[Comment with option double quotes]\n...
+    val general_feedback = "general_feedback" // String
+  }
   val ALL_USE_CASES = "all_usecases"
   val NEW_PROBLEM_ID = "new_problem_id"
 
@@ -57,9 +64,13 @@ object Shared {
     val string = "exerciseDesc"
     def intro = "intro"
     def desc = "desc"
-    def reference = "reference"
+    def reference = "reference" // Admin mode only
     /** initial grammar */
     val grammar = "grammar"
+  }
+  object CYK_EXERCISES {
+    val nonterminals = "nonterminals" // comma-separated list 
+    val word = "word" // space-separated sequence of terminals
   }
 
   val ENTER_ADMIN_MODE = "EnterAdminMode"

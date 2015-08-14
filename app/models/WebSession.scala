@@ -618,7 +618,7 @@ class WebSession(remoteIP: String) extends Actor {
           ("Cannot generate a word for the grammar of size: ", minWordLength.toString, None)
       }
     case CYKEx =>
-      ( s"""Show the CYK parse table for the word "${wordToString(gentry.word.get)}" of the grammar """,
+      ( s"""Write the CYK parse table for the word "${wordToString(gentry.word.get)}" of the grammar """,
         renameAutoSymbols(gentry.cnfRef).toHTMLString, None)
     case ProgLangEx =>
       val stmt = s"""Refine the grammar for ${gentry.desc} shown in the editor""" +
