@@ -42,12 +42,12 @@ object Shared {
     val word = "word"
     val usecases = "usecases"
   }
-  object CYK_CHECK {
+  object CYK_CHECK extends StringLike {
+    val string = "cyk_check"
     // receive or send in "solve" & "admin" mode.
     val table = "table" // [start]-[end]:[Comma-separated nonterminals chosen by the student]\n....
     // In response, you should send.
     val table_feedback = "table_feedback" // [start]-[end]:[Comment with option double quotes]\n...
-    val general_feedback = "general_feedback" // String
   }
   val ALL_USE_CASES = "all_usecases"
   val NEW_PROBLEM_ID = "new_problem_id"
@@ -72,7 +72,7 @@ object Shared {
     val nonterminals = "nonterminals" // comma-separated list 
     val word = "word" // space-separated sequence of terminals
   }
-
+  val FEEDBACK = "feedback" 
   val ENTER_ADMIN_MODE = "EnterAdminMode"
   val REJECT_ADMIN_ACCESS = "RejectAdminAccess"
   val FULL_SOLUTION = "fullsolution"
