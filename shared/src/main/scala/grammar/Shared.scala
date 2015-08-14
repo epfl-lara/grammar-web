@@ -32,7 +32,7 @@ object Shared {
   val NORMALIZE = "normalize"
   val GET_HINTS = "getHints"
   val GET_HELP = "getHelp"
-  val SOLVE = "solve"
+  val SOLVE = "solve"    
   val SAVE_GRAMMAR = "saveGrammar"
   object SAVE {
     val title = "title"
@@ -42,9 +42,10 @@ object Shared {
     val word = "word"
     val usecases = "usecases"
   }
+  val SOLUTION = "solution" 
   object CYK_CHECK extends StringLike {
     val string = "cyk_check"
-    // receive or send in "solve" & "admin" mode.
+    // receive (sending in admin mode happens via solution)
     val table = "table" // [start]-[end]:[Comma-separated nonterminals chosen by the student]\n....
     // In response, you should send.
     val table_feedback = "table_feedback" // [start]-[end]:[Comment with option double quotes]\n...
