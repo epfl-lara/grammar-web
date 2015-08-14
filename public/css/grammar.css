@@ -54,6 +54,20 @@ div#title {
   background: orange;
 }
 
+.cyk-table {
+  background: #164F00;
+}
+.cyk-table td {
+  text-align: center;
+  max-width: 5em;
+}
+.cyk-header {
+  background: white;
+}
+.cyk-input {
+  border-top: 2px solid black;
+}
+
 i {
     font-size: 14px;
 }

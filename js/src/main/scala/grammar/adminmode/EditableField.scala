@@ -16,14 +16,14 @@ case class EditableField(description: String, onSave: (String => Unit), multilin
   def build(modifiers: (editableField.type => editableField.type)) = modifiers(editableField)(this)
 }
 object EditableField {
-  case class EditableFieldState(edit: Boolean, description: String)
-  case class EditableFieldBackend($: BackendScope[EditableField, EditableFieldState]) {
+  case class State(edit: Boolean, description: String)
+  case class Backend($: BackendScope[EditableField, State]) {
     protected val _fieldInput = Ref.to(EditableFieldInput.editableFieldInput, AdminMode.fieldInputKey)
     def fieldInput = _fieldInput($)
     var changeTimer: js.timers.SetTimeoutHandle = null
 
     def onChange(e: String) = {
-      $.modState((s: EditableFieldState) => s.copy(description = e), () => {
+      $.modState((s: State) => s.copy(description = e), () => {
         js.timers.clearTimeout(changeTimer)
         changeTimer = js.timers.setTimeout(1000){
           save()
@@ -31,7 +31,7 @@ object EditableField {
       })
     }
 
-    def goToEditMode() = $.modState((s: EditableFieldState) => s.copy(edit = true), () => {
+    def goToEditMode() = $.modState((s: State) => s.copy(edit = true), () => {
       fieldInput.tryFocus()
     })
     def save() = {
@@ -44,12 +44,12 @@ object EditableField {
 
     def goFromEditMode() = {
       save()
-      $.modState((s: EditableFieldState) => s.copy(edit = false))
+      $.modState((s: State) => s.copy(edit = false))
     }
   }
   private val editableField = ReactComponentB[EditableField]("Editable span")
-    .initialStateP( props => EditableFieldState(edit=false, props.description))
-    .backend(EditableFieldBackend)
+    .initialStateP( props => State(edit=false, props.description))
+    .backend(Backend)
     .render( (P, S, B) =>
     <.span(
       <.span(
@@ -65,7 +65,7 @@ object EditableField {
         value = P.description,
         onChange = B.onChange,
         multiline = P.multiline
-      ).buildWithKey(AdminMode.fieldInputKey)
+      ).buildWithRef(AdminMode.fieldInputKey)
     )
     ).build
 }

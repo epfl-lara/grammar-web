@@ -16,8 +16,8 @@ case class UseCasesChecks(all_usecases: Array[(String, String)], use_cases: Arra
   def build = useCasesChecks(this)
 }
 object UseCasesChecks {
-  case class UseCasesChecksState(use_cases: Array[String])
-  case class UseCasesChecksBackend($: BackendScope[UseCasesChecks, UseCasesChecksState]) {
+  case class State(use_cases: Array[String])
+  case class Backend($: BackendScope[UseCasesChecks, State]) {
     def isAllUseCases(use_cases: Array[String] =  $.state.use_cases): Boolean = {
       val uscontains = use_cases.indexOf(_: String) > -1
       !uscontains("proglang") && (uscontains("all") || $.props.all_usecases.forall{
@@ -42,15 +42,15 @@ object UseCasesChecks {
       key match {
         case "all" =>
           if(checked) {
-            $.setState(UseCasesChecksState(use_cases = Array("all")))
+            $.setState(State(use_cases = Array("all")))
           } else {
-            $.setState(UseCasesChecksState(use_cases = Array[String]()))
+            $.setState(State(use_cases = Array[String]()))
           }
         case "nogrammar" =>
           if(checked) {
-            $.setState(UseCasesChecksState(use_cases = Array("nogrammar")))
+            $.setState(State(use_cases = Array("nogrammar")))
           } else {
-            $.setState(UseCasesChecksState(use_cases = Array[String]()))
+            $.setState(State(use_cases = Array[String]()))
           }
         case _ =>
           val current_state = if($.state.use_cases.indexOf("all") > -1) {
@@ -59,7 +59,7 @@ object UseCasesChecks {
             $.props.all_usecases.map(_._1).filter(k => k != "proglang" && k != "all" && k != "nogrammar" && k != "grammar")
           } else $.state.use_cases
 
-          val contains = (s: UseCasesChecksState, key: String) => s.use_cases.contains(key)
+          val contains = (s: State, key: String) => s.use_cases.contains(key)
           $.setState($.state.copy(use_cases = $.props.all_usecases.map(_._1).filter(k => {
             (checked && ((k == key) || (k != key && current_state.indexOf(k) > -1))) ||
               (!checked && k != key && current_state.indexOf(k) > -1)
@@ -72,8 +72,8 @@ object UseCasesChecks {
     }
   }
   val useCasesChecks = ReactComponentB[UseCasesChecks]("Use case checkboxes")
-    .initialStateP( props => UseCasesChecksState(props.use_cases))
-    .backend(UseCasesChecksBackend)
+    .initialStateP( props => State(props.use_cases))
+    .backend(Backend)
     .render{  (P, S, B) => {
     val use_cases = S.use_cases
     val all_use_cases = B.isAllUseCases()

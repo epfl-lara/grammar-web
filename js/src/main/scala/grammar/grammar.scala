@@ -1,6 +1,6 @@
 package grammar
 
-import _root_.grammar.adminmode.{UseCasesChecks, EditableField, AdminMode}
+import grammar.adminmode.{UseCasesChecks, EditableField, AdminMode}
 import japgolly.scalajs.react.vdom.Attr
 
 import scala.scalajs.js
@@ -34,6 +34,9 @@ trait HandlerDataArgument extends js.Any {
 
   var all_usecases: js.UndefOr[String] = js.native
   var new_problem_id: Int = js.native
+  
+  // CYK
+  var table_feedback: js.UndefOr[String] = js.native
 }
 
 object GrammarApp extends JSApp {
@@ -50,6 +53,39 @@ object GrammarApp extends JSApp {
   val LICENCE_COOKIE = "LicenceCookie"
   val LICENCE_COOKIE_ACCEPTED = "LicenseAccepted"
 
+  object ExerciseMode {
+    var current: ExerciseMode = GrammarMode
+  }
+  sealed trait ExerciseMode { self =>
+    def enter() {
+      ExerciseMode.current = self
+      apply()
+    }
+    protected def apply()
+  }
+  object GrammarMode extends ExerciseMode {
+    def apply() =  {
+      $("#codebox").hide()
+      $("#cykbox").show()
+    }
+  }
+  object CYKTableMode extends ExerciseMode {
+    def apply() =  {
+      $("#codebox").hide()
+      $("#cykbox").show()
+    }
+    var currentTable:ReactComponentU[grammar.CYKTable,Unit,Unit,org.scalajs.dom.raw.Element] = null
+    
+    private var entered_content: Map[String, String] = Map()
+    def storeContent(a: Int, b: Int, nonterminals: String) = entered_content += (s"$a-$b" -> nonterminals)
+    def getContent(): String = entered_content.map(keyvalue => keyvalue._1 + ":" + keyvalue._2).mkString("\n")
+    def render(word: List[String], nonterminals: Array[String]) = {
+      currentTable = CYKTable(word, nonterminals, storeContent).build
+      React.render(currentTable, $("#cykbox")(0).asInstanceOf[dom.Node])
+    }
+  }
+  var currentExerciseMode: ExerciseMode = GrammarMode
+  
   def setCookie(cname: String, cvalue: String, exdays: Int): Unit = {
     val d = new js.Date()
     d.setTime(d.getTime() + (exdays * 24 * 60 * 60 * 1000))
@@ -144,6 +180,11 @@ object GrammarApp extends JSApp {
     editor.setShowPrintMargin(false)
     editor.setAutoScrollEditorIntoView()
     editor.setHighlightActiveLine(false)
+
+    if(0==10) { // Test CYK. Put 1 to the right of the 0 to make this false
+      CYKTableMode.enter()
+      CYKTableMode.render(List("a", "b", "a", "c", "a", "a"), Array("S", "A", "B", "C"))//, (i: Int, j: Int, s: String) => {}).build,
+    }
 
     var editorSession = editor.getSession()
     editorSession.setTabSize(2)
@@ -448,6 +489,16 @@ object GrammarApp extends JSApp {
         //doHelp() should we enable this ?
       }
     }
+    
+    handlers(FEEDBACK) = (data: HandlerDataArgument) => {
+      if(data.table_feedback.isDefined) { // CYK
+        val feedback = data.table_feedback.get
+      // TODO: CYK feedback.
+        
+      } else {
+        
+      }
+    }
 
     //adding options to the downdown list
     handlers(EXERCISE_TYPES) = (data: HandlerDataArgument) => { // This is not the right type here.
@@ -683,8 +734,8 @@ object GrammarApp extends JSApp {
     def renderDescription(data: HandlerDataArgument): Unit = {
       $("#desc").empty()
       import AdminMode._
-      val referenceKey = "reference"
-      val initialKey = "initial"
+      val referenceRef = "reference"
+      val initialRef = "initial"
       case class ExerciseDescriptionBackend($: BackendScope[HandlerDataArgument, GrammarSave]) {
         def setGrammarSaveMode(g: GrammarSave) = {
           js.timers.setTimeout(timeWindow + 500)(grammarSave = g)
@@ -710,14 +761,14 @@ object GrammarApp extends JSApp {
               adminmode.Button("reference", () => {
                 B.setGrammarSaveMode(GrammarSave.Reference)
                 grammarSave = GrammarSave.None
-                replaceGrammar(P.reference)}, selected = S == GrammarSave.Reference).buildWithKey(referenceKey),
+                replaceGrammar(P.reference)}, selected = S == GrammarSave.Reference).buildWithRef(referenceRef),
               adminmode.Button("initial", () => {
                 B.setGrammarSaveMode(GrammarSave.Initial)
                 val initGrammar = if(P.initial.isDefined) P.initial.get else ""
                 grammarSave = GrammarSave.None
                 replaceGrammar(initGrammar)
-              }, selected = S == GrammarSave.Initial).buildWithKey(initialKey),
-              adminmode.Button("exit", () => {
+              }, selected = S == GrammarSave.Initial).buildWithRef(initialRef),
+              grammarSave != GrammarSave.None ?= adminmode.Button("exit grammar editing mode", () => {
                 addFeedback("Exiting grammar save mode")
                 B.setGrammarSaveMode(GrammarSave.None)}).build,
               <.br()
@@ -971,23 +1022,34 @@ object GrammarApp extends JSApp {
 
     def doCheck() {
       eventTitle = "Solution check"
-      var currentCode = editor.getValue()
-      //first save the state
-      save(currentCode)
-      //get "id" of the selected problem
-      var exid = getCurrentExerciseId()
-      var pid = getCurrentProblemId()
-      //var pid = $("#example-loader").find(":selected").val()
-      if (exid == "")
-        notification("Exercise not selected!", "error")
-      if (pid == "")
-        notification("Problem not selected!", "error")
-      else {
-        var msg = JSON.stringify(
-          l(action = "doCheck", exerciseId = exid, problemId = pid, code = currentCode)
-        )
-        leonSocket.send(msg)
+      val exid = getCurrentExerciseId()
+      val pid = getCurrentProblemId()
+      currentExerciseMode match {
+        case GrammarMode =>
+          var currentCode = editor.getValue()
+          //first save the state
+          save(currentCode)
+          //get "id" of the selected problem
+          //var pid = $("#example-loader").find(":selected").val()
+          if (exid == "")
+            notification("Exercise not selected!", "error")
+          if (pid == "")
+            notification("Problem not selected!", "error")
+          else {
+            var msg = JSON.stringify(
+              l(action = "doCheck", exerciseId = exid, problemId = pid, code = currentCode)
+            )
+            leonSocket.send(msg)
+          }
+        case CYKTableMode =>
+          val table: String = CYKTableMode.getContent()
+          // TODO: Do the check here.
+          var msg = JSON.stringify(
+            l(ACTION -> DO_CHECK, EXERCISE_ID -> exid, PROBLEM_ID -> pid, CYK_CHECK.table -> table)
+          )
+          leonSocket.send(msg)
       }
+      
     }
 
     def requestHint() {

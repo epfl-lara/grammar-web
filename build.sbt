@@ -2,7 +2,7 @@ name := """grammar-web"""
 
 version := "1.0-SNAPSHOT"
 
-lazy val root = (project in file(".")).enablePlugins(PlayScala).aggregate(js).dependsOn(shared)
+lazy val root = (project in file(".")).enablePlugins(PlayScala).aggregate(aceJsProject, js).dependsOn(shared)
 
 scalaVersion := "2.11.1"
 
