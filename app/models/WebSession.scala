@@ -736,7 +736,9 @@ class WebSession(remoteIP: String) extends Actor {
       case CYKEx =>
         val userTable = userAnswer.split("\n").map { entry =>
           val Seq(indexPart, nontermPart) = entry.split(":").toSeq
-          val Seq(s, t) = indexPart.split("-").map(_.toInt).toSeq
+          val tmp1 = indexPart.split("-")
+          val tmp2 = tmp1.map(_.toInt)
+          val Seq(s, t) = tmp2.toSeq
           val nonterms = nontermPart.split(",").toSet
           ((s, t), nonterms)
         }.toMap
@@ -766,21 +768,21 @@ class WebSession(remoteIP: String) extends Actor {
     val N = cykTable.length
     var fdb = Map[String, String]()
     breakable {
-      for (k <- 1 to N) // substring length 
-        for (p <- 0 to (N - k)) {
+      for (k <- 1 to N;//) // substring length 
+        /*for (*/p <- 0 to (N - k)) {
           val i = p; val j = p + k - 1;
-          if (userTable.contains((i, j))) {
+          //if (userTable.contains((i, j))) {
             val ans = cykTable(i)(j).map(_.toString())
-            if (userTable((i, j)) != ans) {
+            if (userTable.getOrElse((i, j), Set.empty) != ans) {
               fdb = Map(CYK_CHECK.table_feedback -> s"$i-$j: Values for the entry is incorrect",
                 FEEDBACK.text -> "The solution has incorrect values for some entries!")
               break
             }
-          } else {
+          /*} else {
             fdb = Map(CYK_CHECK.table_feedback -> s"$i-$j: Entry does not exit!",
-              FEEDBACK.text -> "The solution is incomplete! there are entrie without answers.")
+              FEEDBACK.text -> "The solution is incomplete! there are entries without answers.")
             break
-          }
+          }*/
         }
     }
     if (fdb.isEmpty)

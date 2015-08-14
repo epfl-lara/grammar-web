@@ -67,6 +67,9 @@ div#title {
 .cyk-input {
   border-top: 2px solid black;
 }
+.cyk-wrong {
+  background: red;
+}
 
 i {
     font-size: 14px;

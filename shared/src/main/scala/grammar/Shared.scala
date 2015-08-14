@@ -71,7 +71,7 @@ object Shared {
   }
   object CYK_EXERCISES {
     val nonterminals = "nonterminals" // comma-separated list 
-    val word = "word" // space-separated sequence of terminals
+    val word = "cyk_word" // space-separated sequence of terminals
   }
   object FEEDBACK extends StringLike {
     val string = "feedback"

@@ -35,8 +35,12 @@ trait HandlerDataArgument extends js.Any {
   var all_usecases: js.UndefOr[String] = js.native
   var new_problem_id: Int = js.native
   
+  var feedback_text: String = js.native
+  
   // CYK
   var table_feedback: js.UndefOr[String] = js.native
+  var nonterminals: js.UndefOr[String] = js.native
+  var cyk_word: js.UndefOr[String] = js.native
 }
 
 object GrammarApp extends JSApp {
@@ -65,8 +69,8 @@ object GrammarApp extends JSApp {
   }
   object GrammarMode extends ExerciseMode {
     def apply() =  {
-      $("#codebox").hide()
-      $("#cykbox").show()
+      $("#codebox").show()
+      $("#cykbox").hide()
     }
   }
   object CYKTableMode extends ExerciseMode {
@@ -84,7 +88,6 @@ object GrammarApp extends JSApp {
       React.render(currentTable, $("#cykbox")(0).asInstanceOf[dom.Node])
     }
   }
-  var currentExerciseMode: ExerciseMode = GrammarMode
   
   def setCookie(cname: String, cvalue: String, exdays: Int): Unit = {
     val d = new js.Date()
@@ -491,12 +494,17 @@ object GrammarApp extends JSApp {
     }
     
     handlers(FEEDBACK) = (data: HandlerDataArgument) => {
-      if(data.table_feedback.isDefined) { // CYK
+      val text = data.feedback_text
+      addFeedback(text)
+      if(getCurrentExerciseId() == "cyk" && data.table_feedback.isDefined) { // CYK
         val feedback = data.table_feedback.get
-      // TODO: CYK feedback.
-        
-      } else {
-        
+        for(line <- feedback.split("\n");
+            split = line.split(":").toSeq;
+            Seq(ab,error) = split;
+            Seq(a,b) = ab.split("-").toSeq) {
+          $("#cyk$a-$b").addClass("cyk-wrong")
+        }
+        // TODO: Handle table feedback
       }
     }
 
@@ -814,6 +822,12 @@ object GrammarApp extends JSApp {
         })
       }
       $("#desc").data("received-data", data)
+      if(getCurrentExerciseId() == "cyk") {
+        CYKTableMode.enter()
+        CYKTableMode.render(data.cyk_word.get.split(" ").toList, data.nonterminals.get.split(","))
+      } else {
+        GrammarMode.enter()
+      }
     }
 
     handlers(EXERCISE_DESC) = (data: HandlerDataArgument) => renderDescription(data)
@@ -1024,7 +1038,7 @@ object GrammarApp extends JSApp {
       eventTitle = "Solution check"
       val exid = getCurrentExerciseId()
       val pid = getCurrentProblemId()
-      currentExerciseMode match {
+      ExerciseMode.current match {
         case GrammarMode =>
           var currentCode = editor.getValue()
           //first save the state
@@ -1045,7 +1059,7 @@ object GrammarApp extends JSApp {
           val table: String = CYKTableMode.getContent()
           // TODO: Do the check here.
           var msg = JSON.stringify(
-            l(ACTION -> DO_CHECK, EXERCISE_ID -> exid, PROBLEM_ID -> pid, CYK_CHECK.table -> table)
+            l(ACTION -> DO_CHECK, EXERCISE_ID -> exid, PROBLEM_ID -> pid, "code" -> table)
           )
           leonSocket.send(msg)
       }
