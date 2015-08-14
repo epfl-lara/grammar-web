@@ -72,7 +72,10 @@ object Shared {
     val nonterminals = "nonterminals" // comma-separated list 
     val word = "word" // space-separated sequence of terminals
   }
-  val FEEDBACK = "feedback" 
+  object FEEDBACK extends StringLike {
+    val string = "feedback"
+    val text = "feedback_text"
+  }  
   val ENTER_ADMIN_MODE = "EnterAdminMode"
   val REJECT_ADMIN_ACCESS = "RejectAdminAccess"
   val FULL_SOLUTION = "fullsolution"
