@@ -1,6 +1,6 @@
 package grammar
 
-import org.scalajs.jquery.{JQueryEventObject, JQuery}
+import org.scalajs.jquery.{JQueryStatic, JQueryEventObject, JQuery}
 
 import scala.scalajs.js
 import scala.scalajs.js.annotation.JSName
@@ -14,13 +14,27 @@ trait JQueryExtended extends JQuery {
 
   @JSName("val") def value(e: js.Any): JQuery = js.native
   def html(e: js.Any): JQuery = js.native
+
+  def autocomplete(e: js.Any, f: js.Any = null): JQuery = js.native
 }
 
 trait JQueryEventObjectExtended extends JQueryEventObject {
   val keyCode: Int = js.native
 }
 
+trait JQueryStaticExtended extends js.Any {
+  val ui: JQueryStaticExtendedUi = js.native
+}
+trait JQueryStaticExtendedUi extends js.Any {
+  val autocomplete: JQueryStaticExtendedUiAutoComplete = js.native
+}
+trait JQueryStaticExtendedUiAutoComplete extends js.Any {
+  def filter(a: js.Array[String], part: String): js.Array[String] = js.native
+}
+
+
 object JQueryExtended {
+  implicit def toJQueryStaticExtended(t: JQueryStatic): JQueryStaticExtended = t.asInstanceOf[JQueryStaticExtended]
   @inline implicit def toJQueryExtended(t: JQuery): JQueryExtended = t.asInstanceOf[JQueryExtended]
   @inline implicit def dynamicToBoolean(d: js.Dynamic): Boolean = d.asInstanceOf[Boolean]
   //@inline implicit def dynamicToString(d: js.Dynamic): String = d.asInstanceOf[String]

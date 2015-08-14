@@ -8,18 +8,18 @@ import japgolly.scalajs.react.{ReactComponentB, BackendScope}
  */
 case class Button(text: String, onClick: () => Unit, selected: Boolean = false) {
   def build = Button.adminButton(this)
-  def buildWithKey(key: String) = Button.adminButton.withKey(key)(this)
+  def buildWithRef(ref: String) = Button.adminButton.withRef(ref)(this)
 }
 object Button {
-  case class AdminButtonState(selected: Boolean = false)
+  case class State(selected: Boolean = false)
 
-  case class AdminButtonBackend($: BackendScope[Button, AdminButtonState]) {
-    def select(b: Boolean = true) = $.setState(AdminButtonState(b))
+  case class Backend($: BackendScope[Button, State]) {
+    def select(b: Boolean = true) = $.setState(State(b))
   }
 
   val adminButton = ReactComponentB[Button]("Open reference grammar button")
-    .initialStateP(P => AdminButtonState(P.selected))
-    .backend(AdminButtonBackend)
+    .initialStateP(P => State(P.selected))
+    .backend(Backend)
     .render((P, S, B) => {
     <.input(
       ^.classSet1("admin-button",
