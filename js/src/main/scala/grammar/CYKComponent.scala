@@ -5,24 +5,41 @@ import japgolly.scalajs.react._
 import org.scalajs.jquery._
 import org.scalajs.jquery.{jQuery => $, JQueryAjaxSettings, JQueryXHR, JQuery, JQueryEventObject}
 import scala.scalajs.js
-import scala.scalajs.js.Dynamic.{literal => l}
+import scala.scalajs.js.Dynamic.{literal => l, global => g}
 import org.scalajs.dom
 import org.scalajs.dom._
 import scala.scalajs.js.ArrayOps
+import CYKTable.ErrorCorrectMap
 
 /**
  * Created by Mikael on 13.08.2015.
  */
-case class CYKTable(initialWord: List[String], nonTerminals: Array[String], storeInput: (Int, Int, String) => Unit) {
+case class CYKTable(
+    initialWord: List[String],
+    nonTerminals: Array[String],
+    storeInput: (Int, Int, String) => Unit,
+    errors: Map[(Int, Int), String],
+    correct: Map[(Int, Int), String],
+    updateErrorsCorrect: (ErrorCorrectMap => Unit) => Unit) {
   import CYKTable._
   def build = cykTable(this)
 }
 
 object CYKTable {
   def tdEmpty = <.td(^.className := "cyk-empty")
+  
+  type ErrorMap = Map[(Int, Int), String]
+  type CorrectMap = Map[(Int, Int), String]
+  type ErrorCorrectMap = (ErrorMap, CorrectMap)
 
+  case class State(errors: ErrorMap, correct: CorrectMap)
+  case class Backend(val $: BackendScope[CYKTable,State]) {
+  }
   val cykTable = ReactComponentB[CYKTable]("CYK table")
-  .render(P => {
+  .initialStateP(P => State(P.errors, P.correct))
+  .backend(Backend)
+  .render((P, S, B) => {
+    P.updateErrorsCorrect((errorsCorrect) => B.$.modState(s => s.copy(errors = errorsCorrect._1, correct = errorsCorrect._2)))
     val n = P.initialWord.length
     <.table(^.className := "cyk-table", <.tbody(
       <.tr(^.className := "cyk-header",
@@ -33,18 +50,23 @@ object CYKTable {
            nthRowLocal <- 1 to numRows) yield
       <.tr(
         for (u <- 1 until nthRowLocal) yield tdEmpty,
-        for (k <- nthRowLocal to (n - length + 1) by length)
-          yield CYKTableInput(k, k + length - 1, P.initialWord.drop(k-1).take(length).mkString(" "), P.nonTerminals,
+        for (start <- nthRowLocal to (n - length + 1) by length;
+             end = start + length - 1)
+          yield {
+            val error = S.errors.get((start, end))
+            val correct = S.correct.get((start, end))
+            CYKTableInput(start, end, P.initialWord.drop(start-1).take(length).mkString(" "), P.nonTerminals,
               (input: String) => {
-                P.storeInput(k, k+length-1, input)
-              }
-          ).build,
+                P.storeInput(start-1, end-1, input)
+              },
+              error, correct
+          ).build },
         for (u <- 1 to ((n - nthRowLocal + 1) % length)) yield tdEmpty
       )
     ))
   }).build
 }
-case class CYKTableInput(start: Int, end: Int, word: String, autocomplete: Array[String], storeInput: String => Unit) {
+case class CYKTableInput(start: Int, end: Int, word: String, autocomplete: Array[String], storeInput: String => Unit, error: Option[String], correct: Option[String]) {
   import CYKTableInput._
   def build = cykTableInput(this)
 }
@@ -79,19 +101,20 @@ object CYKTableInput {
       ^.colSpan := length,
       <.input(
         ^.id := id,
-        ^.className := "cyk-input",
+        ^.classSet1("cyk-input",
+            "cyk-wrong" -> P.error.isDefined,
+            "cyk-correct" -> P.correct.isDefined),
         ^.`type` := "text",
         ^.value := S.value, 
         ^.width := "100%",
         ^.boxSizing := "border-box",
-        ^.title := "Non-terminals generating " + P.word,
+        ^.title := P.error.orElse(P.correct).getOrElse("Non-terminals generating " + P.word),
         ^.onBlur --> {
             B.$.modState(s => s.copy(removeTrailingComma(s.value)))
             $("#" + id).autocomplete("close") 
           },
           ^.onChange ==> ((e: ReactEventI) => {
             val value = e.target.value
-            console.log("changed to "+value)
             val terms = value.split(",\\s*")
             storeInput(terms.mkString(","))
             B.$.modState(s => s.copy(value))

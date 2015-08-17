@@ -39,6 +39,7 @@ trait HandlerDataArgument extends js.Any {
   
   // CYK
   var table_feedback: js.UndefOr[String] = js.native
+  var table_feedback_correct: js.UndefOr[String] = js.native
   var nonterminals: js.UndefOr[String] = js.native
   var cyk_word: js.UndefOr[String] = js.native
 }
@@ -78,14 +79,19 @@ object GrammarApp extends JSApp {
       $("#codebox").hide()
       $("#cykbox").show()
     }
-    var currentTable:ReactComponentU[grammar.CYKTable,Unit,Unit,org.scalajs.dom.raw.Element] = null
+    var currentTable:ReactComponentU[grammar.CYKTable,grammar.CYKTable.State,grammar.CYKTable.Backend,org.scalajs.dom.raw.Element] = null
     
     private var entered_content: Map[String, String] = Map()
+
     def storeContent(a: Int, b: Int, nonterminals: String) = entered_content += (s"$a-$b" -> nonterminals)
     def getContent(): String = entered_content.map(keyvalue => keyvalue._1 + ":" + keyvalue._2).mkString("\n")
-    def render(word: List[String], nonterminals: Array[String]) = {
-      currentTable = CYKTable(word, nonterminals, storeContent).build
+    import CYKTable.{ ErrorMap, CorrectMap, ErrorCorrectMap }
+    private var _setErrorsCorrect =  (errorCorrect: ErrorCorrectMap) => {}
+    def setErrorsCorrect(errors: ErrorMap, correct: CorrectMap) = _setErrorsCorrect((errors, correct))
+    def render(word: List[String], nonterminals: Array[String], errors: ErrorMap, correct: CorrectMap) = {
+      currentTable = CYKTable(word, nonterminals, storeContent, errors, correct, _setErrorsCorrect = _).build
       React.render(currentTable, $("#cykbox")(0).asInstanceOf[dom.Node])
+      
     }
   }
   
@@ -186,7 +192,7 @@ object GrammarApp extends JSApp {
 
     if(0==10) { // Test CYK. Put 1 to the right of the 0 to make this false
       CYKTableMode.enter()
-      CYKTableMode.render(List("a", "b", "a", "c", "a", "a"), Array("S", "A", "B", "C"))//, (i: Int, j: Int, s: String) => {}).build,
+      CYKTableMode.render(List("a", "b", "a", "c", "a", "a"), Array("S", "A", "B", "C"), Map((2, 4) -> "error here"), Map())//, (i: Int, j: Int, s: String) => {}).build,
     }
 
     var editorSession = editor.getSession()
@@ -498,13 +504,24 @@ object GrammarApp extends JSApp {
       addFeedback(text)
       if(getCurrentExerciseId() == "cyk" && data.table_feedback.isDefined) { // CYK
         val feedback = data.table_feedback.get
-        for(line <- feedback.split("\n");
-            split = line.split(":").toSeq;
-            Seq(ab,error) = split;
-            Seq(a,b) = ab.split("-").toSeq) {
-          $("#cyk$a-$b").addClass("cyk-wrong")
+        val feedback_correct = data.table_feedback_correct.get
+        val errors = if(feedback == "") {
+          Map(): CYKTable.ErrorMap
+        } else {
+          (for(line <- feedback.split("\n");
+              split = line.split(":").toSeq;
+              Seq(ab,error) = split;
+              Seq(a,b) = ab.split("-").toSeq) yield ((a.toInt + 1, b.toInt+1) -> error)).toMap
         }
-        // TODO: Handle table feedback
+        val correct = if(feedback_correct == "") {
+          Map(): CYKTable.CorrectMap
+        } else {
+          (for(line <- feedback_correct.split("\n");
+              split = line.split(":").toSeq;
+              Seq(ab,error) = split;
+              Seq(a,b) = ab.split("-").toSeq) yield ((a.toInt + 1, b.toInt+1) -> error)).toMap
+        }
+        CYKTableMode.setErrorsCorrect(errors, correct)
       }
     }
 
@@ -824,7 +841,7 @@ object GrammarApp extends JSApp {
       $("#desc").data("received-data", data)
       if(getCurrentExerciseId() == "cyk") {
         CYKTableMode.enter()
-        CYKTableMode.render(data.cyk_word.get.split(" ").toList, data.nonterminals.get.split(","))
+        CYKTableMode.render(data.cyk_word.get.split(" ").toList, data.nonterminals.get.split(","), Map(), Map())
       } else {
         GrammarMode.enter()
       }
@@ -841,7 +858,6 @@ object GrammarApp extends JSApp {
       all_use_cases = data.all_usecases.get
       new_problem_id = data.new_problem_id
       // Re-renders some descriptions
-      // TODO: Re-ask for the exercise.
       val exId = getCurrentExerciseId()
       val pid = getCurrentProblemId()
       console.log("setting timer up...")
@@ -1057,7 +1073,6 @@ object GrammarApp extends JSApp {
           }
         case CYKTableMode =>
           val table: String = CYKTableMode.getContent()
-          // TODO: Do the check here.
           var msg = JSON.stringify(
             l(ACTION -> DO_CHECK, EXERCISE_ID -> exid, PROBLEM_ID -> pid, "code" -> table)
           )

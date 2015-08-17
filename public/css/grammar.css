@@ -68,7 +68,10 @@ div#title {
   border-top: 2px solid black;
 }
 .cyk-wrong {
-  background: red;
+  background: #f2dede !important;
+}
+.cyk-correct {
+  background: #55F655 !important;
 }
 
 i {

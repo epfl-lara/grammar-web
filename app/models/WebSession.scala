@@ -734,7 +734,9 @@ class WebSession(remoteIP: String) extends Actor {
           checkGNFSolution(gentry, bnfGrammar.get)
 
       case CYKEx =>
-        val userTable = userAnswer.split("\n").map { entry =>
+        val lines = userAnswer.split("\n")
+        
+        val userTable = if(lines.length == 1 && lines(0) == "") Map[(Int, Int), Set[String]]() else lines.map { entry =>
           val Seq(indexPart, nontermPart) = entry.split(":").toSeq
           val tmp1 = indexPart.split("-")
           val tmp2 = tmp1.map(_.toInt)
@@ -767,28 +769,23 @@ class WebSession(remoteIP: String) extends Actor {
     // compare (valid) entries of the CYK table
     val N = cykTable.length
     var fdb = Map[String, String]()
+    var correct = ListBuffer[String]()
     breakable {
       for (k <- 1 to N;//) // substring length 
         /*for (*/p <- 0 to (N - k)) {
           val i = p; val j = p + k - 1;
-          //if (userTable.contains((i, j))) {
-            val ans = cykTable(i)(j).map(_.toString())
-            if (userTable.getOrElse((i, j), Set.empty) != ans) {
-              fdb = Map(CYK_CHECK.table_feedback -> s"$i-$j: Values for the entry is incorrect",
-                FEEDBACK.text -> "The solution has incorrect values for some entries!")
-              break
-            }
-          /*} else {
-            fdb = Map(CYK_CHECK.table_feedback -> s"$i-$j: Entry does not exit!",
-              FEEDBACK.text -> "The solution is incomplete! there are entries without answers.")
+          val ans = cykTable(i)(j).map(_.toString())
+          if (userTable.getOrElse((i, j), Set.empty) != ans) {
+            fdb = Map(CYK_CHECK.table_feedback -> s"$i-$j:Missing or wrong symbols",
+              FEEDBACK.text -> "The solution has incorrect values for some entries!")
             break
-          }*/
+          } else correct += s"$i-$j:Correct"
         }
     }
     if (fdb.isEmpty)
-      Last(Map(FEEDBACK.text -> "Correct!"))
+      Last(Map(FEEDBACK.text -> "Correct!", CYK_CHECK.table_feedback -> "") + (CYK_CHECK.table_feedback_correct -> correct.mkString("\n")))
     else
-      Last(fdb)
+      Last(fdb + (CYK_CHECK.table_feedback_correct -> correct.mkString("\n")))
   }
 
   def checkDerivation(gentry: GrammarEntry, derivationSteps: List[SententialForm], word: Word): String = {
