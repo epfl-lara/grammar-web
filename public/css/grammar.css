@@ -32,6 +32,48 @@ div#title {
     overflow: hidden;
 }
 
+.admin-editable {
+      outline: 1px dashed blue;
+      -moz-box-shadow: 3px 3px 5px #656565;
+      -webkit-box-shadow: 3px 3px 5px #656565;
+      -o-box-shadow: 3px 3px 5px #656565;
+      box-shadow: 3px 3px 5px #656565;
+      margin-bottom: 3px;
+      margin-right: 3px;
+}
+
+.admin-button {
+  background: blue;
+  color: white;
+  border-radius: 0.5em;
+  margin-left: 0.2em;
+  margin-right: 0.3em;
+}
+
+.admin-button-selected {
+  background: orange;
+}
+
+.cyk-table {
+  background: #164F00;
+}
+.cyk-table td {
+  text-align: center;
+  max-width: 5em;
+}
+.cyk-header {
+  background: white;
+}
+.cyk-input {
+  border-top: 2px solid black;
+}
+.cyk-wrong {
+  background: #F88080 !important;
+}
+.cyk-correct {
+  background: #55F655 !important;
+}
+
 i {
     font-size: 14px;
 }

@@ -1,0 +1,79 @@
+program ->   sourceElements?
+sourceElements ->   sourceElement+
+sourceElement ->   statement | functionDeclaration
+statement ->   block | variableStatement | emptyStatement | expressionStatement | ifStatement | iterationStatement | continueStatement | breakStatement | returnStatement | withStatement | labelledStatement | switchStatement | throwStatement | tryStatement 
+block ->   '{' statementList? '}'
+statementList ->   statement+
+variableStatement ->   Var variableDeclarationList
+variableDeclarationList ->   variableDeclaration ( ',' variableDeclaration )*
+variableDeclaration ->   Identifier initialiser?
+initialiser ->   '=' singleExpression
+emptyStatement ->   ';'
+expressionStatement ->   expressionSequence
+ifStatement ->   If '(' expressionSequence ')' statement ( Else statement )?
+iterationStatement ->   Do statement While '(' expressionSequence ')' | While '(' expressionSequence ')' statement | For '(' expressionSequence? ';' expressionSequence? ';' expressionSequence? ')' statement | For '(' Var variableDeclarationList ';' expressionSequence? ';' expressionSequence? ')' statement | For '(' singleExpression In expressionSequence ')' statement | For '(' Var variableDeclaration In expressionSequence ')' statement
+continueStatement ->   Continue Identifier?
+breakStatement ->   Break Identifier?
+returnStatement ->   Return expressionSequence?
+withStatement ->   With '(' expressionSequence ')' statement
+switchStatement ->   Switch '(' expressionSequence ')' caseBlock
+caseBlock ->   '{' caseClauses? ( defaultClause caseClauses? )? '}'
+caseClauses ->   caseClause+
+caseClause ->   Case expressionSequence ':' statementList?
+defaultClause ->   Default ':' statementList?
+labelledStatement ->   Identifier ':' statement
+throwStatement ->   Throw expressionSequence
+tryStatement ->   Try block catchProduction | Try block finallyProduction | Try block catchProduction finallyProduction
+catchProduction ->   Catch '(' Identifier ')' block
+finallyProduction ->   Finally block
+functionDeclaration ->   Function Identifier '(' formalParameterList? ')' '{' functionBody '}'
+formalParameterList ->   Identifier ( ',' Identifier )*
+functionBody ->   sourceElements?
+arrayLiteral ->   '[' elementList? ','? elision? ']'
+elementList ->   elision? singleExpression ( ',' elision? singleExpression )*
+elision ->   ','+
+objectLiteral ->   '{' propertyNameAndValueList? ','? '}'
+propertyNameAndValueList ->   propertyAssignment ( ',' propertyAssignment )*
+propertyAssignment ->   propertyName ':' singleExpression | getter '(' ')' '{' functionBody '}' | setter '(' propertySetParameterList ')' '{' functionBody '}'
+propertyName ->   identifierName | StringLiteral | numericLiteral
+propertySetParameterList ->   Identifier
+arguments ->   '(' argumentList? ')'
+argumentList ->   singleExpression ( ',' singleExpression )*
+expressionSequence ->   singleExpression ( ',' singleExpression )*
+singleExpression ->   Function Identifier? '(' formalParameterList? ')' '{' functionBody '}' | singleExpression '[' expressionSequence ']' | singleExpression '.' identifierName | singleExpression arguments | New singleExpression arguments? | singleExpression '++' | singleExpression '--' | Delete singleExpression | Void singleExpression | Typeof singleExpression | '++' singleExpression | '--' singleExpression | '+' singleExpression | '-' singleExpression | '~' singleExpression | '!' singleExpression | singleExpression ( '*' | '/' | '%' ) singleExpression | singleExpression ( '+' | '-' ) singleExpression | singleExpression ( '<<' | '>>' | '>>>' ) singleExpression | singleExpression ( '<' | '>' | '<=' | '>=' ) singleExpression | singleExpression Instanceof singleExpression | singleExpression In singleExpression | singleExpression ( '==' | '!=' | '===' | '!==' ) singleExpression | singleExpression '&' singleExpression | singleExpression '^' singleExpression | singleExpression '|' singleExpression | singleExpression '&&' singleExpression | singleExpression '||' singleExpression | singleExpression '?' singleExpression ':' singleExpression | singleExpression '=' expressionSequence | singleExpression assignmentOperator expressionSequence | This | Identifier | literal | arrayLiteral | objectLiteral | '(' expressionSequence ')'
+assignmentOperator ->   '*=' | '/=' | '%=' | '+=' | '-=' | '<<=' | '>>=' | '>>>=' | '&=' | '^=' | '|='
+literal ->   ( NullLiteral | BooleanLiteral | StringLiteral | RegularExpression ) | numericLiteral
+numericLiteral ->   Number
+identifierName ->   Identifier | reservedWord
+reservedWord ->   keyword | ( NullLiteral | BooleanLiteral )
+keyword ->   Break | Do | Instanceof | Typeof | Case | Else | New | Var | Catch | Finally | Return | Void | Continue | For | Switch | While | Function | This | With | Default | If | Throw | Delete | In | Try
+getter ->   Identifier
+setter ->   Identifier
+NullLiteral ->   'null'
+BooleanLiteral ->   'true' | 'false'
+Break       ->  'break'
+Do          ->  'do'
+Instanceof  ->  'instanceof'
+Typeof      ->  'typeof'
+Case        ->  'case'
+Else        ->  'else'
+New         ->  'new'
+Var         ->  'var'
+Catch       ->  'catch'
+Finally     ->  'finally'
+Return      ->  'return'
+Void        ->  'void'
+Continue    ->  'continue'
+For         ->  'for'
+Switch      ->  'switch'
+While       ->  'while'
+Function    ->  'function'
+This        ->  'this'
+With        ->  'with'
+Default     ->  'default'
+If          ->  'if'
+Throw       ->  'throw'
+Delete      ->  'delete'
+In          ->  'in'
+Try         ->  'try'
+StringLiteral ->   String

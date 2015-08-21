@@ -1,0 +1,584 @@
+
+	<grammars>
+		<!-- Some ambiguous grammars -->
+		<grammar id='1' usecases="nogrammar">
+			<title>
+				<i>Balanced Parentheses</i>
+			</title>
+			<description>
+				<p>
+					The set of all strings of balanced parentheses. E.g. "(())()","()()()" and so on belongs
+					to the language, but "(()", "()(", ")()" do not.
+				</p>
+			</description>
+			<reference>
+				<rule>S ->  '(' S ')' | S S | ""</rule>
+			</reference>
+		</grammar>
+		<grammar id='2' usecases="nogrammar">
+			<title>
+				<i>Expressions</i>
+			</title>
+			<description>
+				<p>
+					The set of all well-formed expressions comprising { '+', '*', '(', ')', ID }.
+				</p>
+			</description>
+			<reference>
+				<rule>E -> E '+' E | E '*' E | '(' E ')' | ID</rule>
+			</reference>
+		</grammar>
+		<grammar id='3' usecases="nogrammar">
+			<title>
+				<i>Function Types</i>
+			</title>
+			<description>
+				<p>The set of all strings representing function types over 'Int'.</p>
+			</description>
+			<reference>
+				<rule>S0 -> S $</rule>
+				<rule>S -> T => S | Int</rule>
+				<rule>T -> S , T | Int</rule>
+			</reference>
+		</grammar>
+		<grammar id='4' usecases="nogrammar">
+			<title>
+				<i>Balanced Parentheses</i>
+			</title>
+			<description>
+				<p>
+					The set of all strings of balanced parentheses over {'(',')','[',']'}. E.g. "[()]()","()[][]"
+					and so on belongs to the language, but "[()", "[(])" do not.
+				</p>
+			</description>
+			<reference>
+				<rule>S ->  '(' S ')' | '[' S ']' | S S | ""</rule>
+			</reference>
+		</grammar>
+		<!-- English to CFG exercises -->
+		<grammar id='5' usecases="all">
+			<title>
+				<i>Equal a's and b's</i>
+			</title>
+			<description>
+				<p>
+					The set of all strings that has a sequence of 'a's followed by a sequence of 'b's,
+					and the number of 'a's and 'b's are equal. That is, L = a
+					<sup>n</sup>
+					b
+					<sup>n</sup>
+					.
+				</p>
+			</description>
+			<reference>
+				<rule>S -> a S b | ""</rule>
+			</reference>
+			<initialFile>./default-init.gram</initialFile>
+		</grammar>
+		<grammar id='6' usecases="grammar">
+			<title>
+				<i>More a's than b's</i>
+			</title>
+			<description>
+				<p>
+					The set of all strings that has a sequence of 'a's followed by a sequence of 'b's,
+					and the number of 'a's is more than the number of 'b's. That is, L = a
+					<sup>n</sup>
+					b
+					<sup>m</sup>
+					, n &gt; m.
+				</p>
+			</description>
+			<reference>
+				<rule>S -> a S | a P</rule>
+				<rule>P -> a P b | ""</rule>
+			</reference>
+		</grammar>
+		<grammar id='7' usecases="grammar">
+			<title>
+				<i>Two times a's as b's</i>
+			</title>
+			<description>
+				<p>
+					The set of all strings that has a sequence of 'a's followed by a sequence of 'b's,
+					and the number of 'a's is at least twice the number of 'b's. That is, L = a
+					<sup>n</sup>
+					b
+					<sup>m</sup>
+					, n &gt;= 2m.
+				</p>
+			</description>
+			<reference>
+				<rule>S -> a S | P</rule>
+				<rule>P -> a a P b | ""</rule>
+			</reference>
+		</grammar>
+		<grammar id='8' usecases="grammar">
+			<title>
+				<i>Palindrome</i>
+			</title>
+			<description>
+				<p>
+					The set of all strings over {'a', 'b', 'c'} that are equal to their reverse,
+					where only the middle character is 'c'. 
+					That is, L = { w c w<sup>R</sup> | w in {a,b}* and w<sup>R</sup> is the reverse of w }.
+				</p>
+			</description>
+			<reference>
+				<rule>S -> a S a | b S b | c</rule>
+			</reference>
+		</grammar>		
+		<grammar id='16' usecases="grammar">
+			<title>
+				<i>Balanced Parentheses</i>
+			</title>
+			<description>
+				<p>
+					The set of all strings of balanced parentheses. E.g. "(())()","()()()" and so on belongs
+					to the language, but "(()", "()(", ")()" does not.
+				</p>
+			</description>
+			<reference>
+				<rule>S -> '(' S ')' S | ""</rule>
+			</reference>
+		</grammar>
+		<grammar id='17' usecases='grammar'>
+			<title>
+				<i>Expressions</i>
+			</title>
+			<description>
+				<p>The set of all well-formed expressions over 
+					{ '+', '*', '(', ')', ID }.</p>
+			</description>
+			<reference>
+				<rule>E -> V Suf</rule>
+				<rule>Suf -> '+' E | '*' E | ""</rule>
+				<rule>V -> '(' E ')' | ID</rule>			
+			</reference>
+		</grammar>
+		<grammar id='18' usecases="grammar">
+			<title>
+				<i>Function Types</i>
+			</title>
+			<description>
+				<p>
+					The set of all strings in { 'Int', '=>', ','} that represent n-ary function types.
+					For example, "Int", "Int => Int", "Int , Int => Int", "Int , Int => Int , Int , Int => Int"
+					and so on belong to the language, whereas "Int , Int", "Int => Int , Int" do not
+					belong to the language    
+				</p>
+			</description>
+			<reference>
+				<rule>S -> Int V</rule>
+				<rule>V -> => Int V | , Int W | ""</rule>
+				<rule>W -> , Int W | => Int V</rule>
+			</reference>
+		</grammar>
+		<grammar id='19' usecases="grammar">
+			<title>
+				<i>Produce, sell, throw away</i>
+			</title>
+			<description>
+				<p>
+					The set of all words starting with a sequence of 'p' (that represents produce), followed
+					by a sequence of 's' (which stands for sell) and ending with a sequence of 't'
+					(which denotes throw away), such that #p = #s + #t (# denotes number of).
+				</p>
+			</description>
+			<reference>
+				<rule>S -> p S t | A</rule>
+				<rule>A -> p A s | ""</rule>
+			</reference>
+		</grammar>
+		<grammar id='21' usecases="nogrammar">
+			<title>
+				<i>Self-describing</i>
+			</title>
+			<description>
+				<p>
+					The set of all strings which can be interpreted as a production of a context-free
+					grammar defined over nontermials { S, A, B }, terminals { a, b}, using the symbol
+					'|' for disjunction and '->' for defining the rule. For example, "S -> a A b",
+					"B -> a B" belong to the language, whereas "S -> ->" does not.
+				</p>
+			</description>
+			<reference>
+				<rule>C -> NT '->' R</rule>
+				<rule>R -> P '|' R | P</rule>
+				<rule>P -> Sym P | Sym</rule>
+				<rule>Sym -> NT | T</rule>
+				<rule>NT -> S | A | B</rule>
+				<rule>T -> a | b</rule>
+			</reference>
+		</grammar>
+		<grammar id='22' usecases="nogrammar">
+			<title>
+				<i>Well-formed regular expressions</i>
+			</title>
+			<description>
+				<p>
+					The set of all well-formed regular expressions over {'a', 'b', '*', '(', ')', '|'}.
+					For example, "( a | b ) * a", "( a * | b * ) *" belong to the language, but "(
+					)", "a |" do not belong to the language
+				</p>
+			</description>
+			<reference>
+				<rule>S -> R</rule>
+				<rule>R -> N | B | R R | ""</rule>
+				<rule>B -> '(' N ')' | R a | R b</rule>
+				<rule>N -> a | b | B '*' | R a | R b</rule>
+			</reference>
+		</grammar>
+		<grammar id='23' usecases="nogrammar">
+			<title>
+				<i>Complement of aNbN</i>
+			</title>
+			<description>
+				<p>
+					The set of all strings over a and b which cannot be written as a
+					<sup>n</sup>
+					b
+					<sup>n</sup>
+					for any n&gt;0.
+				</p>
+			</description>
+			<reference>
+				<rule>S -> AB | BA | H b a H</rule>
+				<rule>AB -> a P | a AB | AB a | P a</rule>
+				<rule>BA -> b P | b BA | BA b | P b</rule>
+				<rule>P -> a P b | ""</rule>
+				<rule>H -> A H | B H | ""</rule>
+				<rule>A -> a A | ""</rule>
+				<rule>B -> b B | ""</rule>
+			</reference>
+		</grammar>
+		<!--> <grammar id='24' usecases="grammar,derivation"> <title> <i>Complement of aNbNcN
+			</i> </title> <description> <p> The set of all strings over a, b, c which cannot
+			be written as a<sup>n</sup>b<sup>n</sup>c<sup>n</sup> for any n&gt;0. </p> </description>
+			<reference> <rule>S -> AB | BA | BC | CB | ABC b a ABC | ABC c b ABC | ABC c a
+			ABC</rule> <rule>AB -> C a PAB | C a AB | AB a C | PAB a C </rule> <rule>BA ->
+			C b PAB | C b BA | BA b C | PAB b C </rule> <rule>PAB -> C a C PAB C b C | C</rule>
+			<rule>BC -> A b PBC | A b BC | BC b A | PBC b A </rule> <rule>CB -> A c PBC | A
+			c CB | CB c A | PBC c A </rule> <rule>PBC -> A b A PBC A c A | A</rule> <rule>ABC
+			-> A ABC | B ABC | C ABC</rule> <rule>A -> a A | ""</rule> <rule>B -> b B | ""</rule>
+			<rule>C -> c C | ""</rule> </reference> </grammar> <!-->
+		<grammar id='26' usecases="grammar">
+			<title>
+				<i>Well-formed regular expressions</i>
+			</title>
+			<description>
+				<p>
+					The set of all well-formed regular expressions over {'a', 'b', '*', '(', ')', '|'}.
+					For example, "( a | b ) * a", "( a * | b * ) *" belong to the language, but "(
+					)", "a |" do not belong to the language
+				</p>
+			</description>
+			<reference>
+				<rule>B -> V BSuf</rule>
+				<rule>BSuf -> '|' B | '*' USuf | ""</rule>
+				<rule>USuf -> B | ""</rule>
+				<rule>V -> '(' B ')' | a | b</rule>
+			</reference>
+		</grammar>
+		<grammar id='30' usecases="grammar">
+			<title>
+				<i>Balanced Parentheses</i>
+			</title>
+			<description>
+				<p>
+					The set of all strings of balanced parentheses over {'(',')','[',']'}. E.g. "[()]()","()[][]"
+					and so on belongs to the language, but "[()", "[(])" do not.
+				</p>
+			</description>
+			<reference>
+				<rule>S -> "" | '(' S ')' S | '[' S ']' S</rule>
+			</reference>
+		</grammar>
+		<grammar id='35' usecases="grammar">
+			<title>
+				<i>Self-describing</i>
+			</title>
+			<description>
+				<p>
+					The set of all strings which can be interpreted as a production of a context-free
+					grammar defined over nontermial Q and terminal a , using the symbol '|' for disjunction
+					and '->' for defining the rule. For example, "Q -> a Q a", "Q -> a Q" belong
+					to the language, whereas "Q -> ->" does not.
+				</p>
+			</description>
+			<reference>
+				<rule>C -> Q '->' P Suf</rule>
+				<rule>Suf ->  '|' P Suf | ""</rule>
+				<rule>P -> Sym Rest</rule>
+				<rule>Rest -> "" | Sym Rest</rule>
+				<rule>Sym -> Q | a</rule>
+			</reference>
+		</grammar>
+		<grammar id='36' usecases="grammar">
+			<title>
+				<i>A While Language</i>
+			</title>
+			<description>
+				<p>
+					A programming language with the following constructs:					
+					<ol>
+						<li>A while construct: while ( expr )</li>
+						<li>A block construct: { /* list of statements */ }</li>
+						<li>A println statement: println ( stringConst , ident )</li>
+						<li>An assignment statement: ident = expr</li>
+						<li>
+							An branch construct: if ( expr ) /*statement*/ else /*statement*/
+						</li>
+					</ol>
+					expr, ident, stringConst, while, {, }, (, ), if, else are tokens generated by the lexer
+					and can be considered as terminals of the grammar 
+				</p>
+			</description>
+			<reference>
+				<rule>stmt ::= println '(' stringConst ',' ident ')'</rule>
+				<rule>stmt ::= ident = expr | if '(' expr ')' stmt else stmt</rule>
+				<rule>stmt ::= while '(' expr ')' stmt | '{' stmt* '}'</rule>
+			</reference>
+		</grammar>
+		<grammar id='37' usecases="nogrammar">
+			<title>
+				<i>Exercise 1 of lecturecise 12</i>
+			</title>
+			<description>
+				<p>A grammar not in CNF</p>				
+			</description>
+			<reference>
+				<rule>S -> A '(' S ')' B | ""</rule>
+				<rule>A -> S | S B | x | ""</rule>
+				<rule>B -> S B | y</rule>
+			</reference>
+		</grammar>
+		<grammar id='38' usecases="nogrammar">
+			<title>
+				<i>Parentheses and Commas</i>
+			</title>
+			<description>
+				<p>A grammar not in LL(1)</p>				
+			</description>
+			<reference>
+				<rule>S -> '(' L ')' | a</rule>
+				<rule>L -> L , S | S</rule>				
+			</reference>
+		</grammar>
+		<grammar id='39' usecases="grammar">
+			<title>
+				<i>Parentheses and Commas</i>
+			</title>
+			<description>
+				<p>the language defined by the following non LL(1) grammar 
+					<ol>
+						<li>S -> '(' L ')' | a</li>
+						<li>L -> L , S | S</li>						
+					</ol>
+				</p>
+			</description>
+			<reference>
+				<rule>S -> '(' L ')' | a</rule>
+				<rule>L -> S Z</rule>
+				<rule>Z -> , L | ""</rule>
+			</reference>
+		</grammar>			
+		<grammar id='40' usecases='grammar'>
+			<title>
+				<i>Expressions</i>
+			</title>
+			<description>
+				<p>The set of all well-formed expressions over { '+', '*', '(', ')', ID } 
+					where '*' is optional and can be omitted in multipication.
+					E.g. ID ID and ID * ID are both permissible
+				</p>
+			</description>
+			<reference>
+				<rule>S -> V Suf2 </rule>
+				<rule>Suf2 -> '*' S | S | ""</rule>
+				<rule>V -> '(' E ')' | ID</rule>				
+			</reference>
+		</grammar>
+		<grammar id='41' usecases='nogrammar'>
+			<title>
+				<i>Hashbang</i>
+			</title>
+			<description>				
+			<p>Hashes (#) followed by zero or more bangs (!), or bang hash or bang</p>
+			</description>
+			<reference>
+				<rule>S -> # A | ! # | !</rule> 
+    			<rule>A -> !  | # B | ""</rule>
+    			<rule>B -> # B | !</rule>
+			</reference>
+		</grammar>
+		<grammar id='42' usecases='grammar'>
+			<title>
+				<i>|W|_1 = 3 % 4</i>
+			</title>
+			<description>	
+			<p>The set of all strings over {0,1} where the number of 1's is 3 modulo 4</p> 			
+			</description>
+			<reference>
+				<rule>S ->  0 S | 1 A </rule>
+				<rule>A ->  0 A | 1 B </rule>
+				<rule>B ->  0 B | 1 C </rule> 
+    			<rule>C ->  0 C | 1 S | "" </rule>    			
+			</reference>
+		</grammar>
+		<grammar id='43' usecases='grammar'>
+			<title>
+				<i>Binary number divisible by 3</i>
+			</title>
+			<description>	
+			<p>The set of all strings over {0,1} that are divisible by 3 (inclusive of empty string)</p> 			
+			</description>
+			<reference>
+				<rule>S ->  0 S | 1 A | "" </rule>
+				<rule>A ->  0 B | 1 S </rule>
+				<rule>B ->  0 A | 1 B </rule>     			    		
+			</reference>
+		</grammar>	
+		<grammar id='44' usecases='grammar'>
+			<title>
+				<i>Words that do not contain all alphabets</i>
+			</title>
+			<description>	
+			<p>The set of all strings over {a,b,c} that do not contain all the three characters</p> 			
+			</description>
+			<reference>
+				<rule>S ->  A | B | C | ""</rule>
+				<rule>A ->  a A | b A | ""</rule>
+				<rule>B ->  b B | c B | ""</rule>
+				<rule>C ->  c C | a C | ""</rule>     			    		
+			</reference>
+		</grammar>
+		<grammar id='45' usecases='grammar'>
+			<title>
+				<i>Conjunctive normal form formulas</i>
+			</title>
+			<description>	
+			<p>
+			  The set of all propositional formulas in conjunctive normal form 
+			  that can be defined using the alphabet { atom, ^, v, ~, '(', ')' }. 
+			  Note that only clauses that contain more than one literal should
+			  be enclosed within parentheses.
+			</p> 			
+			</description>
+			<reference>
+				<rule>F ->  C Suf1</rule>
+				<rule>Suf1 ->  ^ F | ""</rule>
+				<rule>C ->  L | '(' L v D ')'</rule>
+				<rule>D ->  L Suf2 </rule>
+				<rule>Suf2 ->  v D | "" </rule>
+				<rule>L ->  atom | ~ atom</rule>				     			    		
+			</reference>
+		</grammar>
+		<grammar id='46' usecases='grammar'>
+			<title>
+				<i>Words containing ab</i>
+			</title>
+			<description>	
+			<p>
+			  The set of all strings over {a,b} that contain "ab" as a substring. 
+			  E.g., ab, aab, abab etc. 
+			</p> 			
+			</description>
+			<reference>
+				<rule>S ::= b S | a P </rule>
+				<rule>P ::= a P | b R </rule>
+				<rule>R ::= a R | b R | ""</rule>			     			    		
+			</reference>
+		</grammar>
+		<grammar id='47' usecases='nogrammar'>
+			<title>
+				<i>Lambda calculus</i>
+			</title>
+			<description>	
+			<p>
+			  The set of all well-formed lambda terms defined over the alphabet 
+		      {\, ., ID, '(', ')' }, where '\' stands for lambda 
+			</p> 			
+			</description>			
+			<reference>
+				<rule>term ::= \ ID . term | term term | '(' term ')' | ID </rule>							     			    	
+			</reference>
+			<word>\ ID . ID ID ID</word>
+		</grammar>
+		<grammar id='48' usecases='grammar'>
+			<title>
+				<i>Lambda calculus</i>
+			</title>
+			<description>	
+			<p>
+			  The set of all well-formed lambda terms defined over the alphabet 
+		      {\, ., ID, '(', ')' }, where '\' stands for lambda 
+			</p> 			
+			</description>			
+			<reference>				
+				<rule>term -> \ ID . term  | '(' term ')' Suf | ID Suf</rule>
+				<rule>Suf -> term | ""</rule>																			     			    	
+			</reference>			
+		</grammar>
+		<!-- path relative to the directory of this file -->
+	    <grammar id='49' usecases='proglang'>
+			<title>
+				<i>Simple Java Grammar</i>
+			</title>
+			<description>	
+			<p>
+			  A Subset of Java programming language  
+			</p> 			
+			</description>			
+			<referenceFile>./OracleJavaGrammar.gram</referenceFile>
+			<initialFile>./SimpleJavaGrammar.gram</initialFile> 			
+		</grammar> 
+		<grammar id='50' usecases='proglang'>
+			<title>
+				<i>Java 7</i>
+			</title>
+			<description>	
+			<p>
+			  Java programming language 1.7 
+			</p> 			
+			</description>			
+			<referenceFile>./OracleJavaGrammar.gram</referenceFile>
+			<initialFile>./AntlrJavaGrammar.gram</initialFile> 			
+		</grammar>
+		<grammar id='51' usecases='proglang'>
+			<title>
+				<i>ANSI C 2011</i>
+			</title>
+			<description>	
+			<p>
+			  C programming language 2011 standard 
+			</p> 			
+			</description>			
+			<referenceFile>./AntlrCGrammar.gram</referenceFile>
+			<initialFile>./CGrammar2.gram</initialFile> 			
+		</grammar>
+		<grammar id='52' usecases='proglang'>
+			<title>
+				<i>Javascript</i>
+			</title>
+			<description>	
+			<p>
+			  Javascript programming langauge ECMAScript standard 
+			</p> 			
+			</description>			
+			<referenceFile>./MozillaJSGrammar.gram</referenceFile>
+			<initialFile>./AntlrJSGrammar.gram</initialFile> 			
+		</grammar>
+		<!-- <grammar id='53' usecases='proglang'>
+			<title>
+				<i>Pascal</i>
+			</title>
+			<description>	
+			<p>
+			  Pascal programming language 
+			</p> 			
+			</description>			
+			<referenceFile>./AntlrPascalGrammar.gram</referenceFile>
+			<initialFile>./PascalGrammar1.gram</initialFile> 			
+		</grammar>  -->																										
+	</grammars>

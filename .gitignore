@@ -16,5 +16,9 @@ dist
 /bin
 /lib
 /cfgchecker.log
-/public/resources
+/public/resources/bin/
 /tequila-java-client-2.0.2
+/public/js/js-fastopt.js
+/public/js/js-fastopt.js.map
+/public/js/js-jsdeps.js
+/shared/shared.iml
