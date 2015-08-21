@@ -1,4 +1,3 @@
-wP
 ### Setting up
 
 From the repository `CFG-Checking`, run the following commands to ensure that you have all the necessary files.
