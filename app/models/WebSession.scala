@@ -643,13 +643,13 @@ class WebSession(remoteIP: String) extends Actor {
               None)
         }
       case ProgLangEx =>
-        val stmt = s"""Refine the grammar for ${gentry.desc} shown in the editor""" +
+        val (intro, stmt) = (s"Refine the grammar for", s"${gentry.desc} shown in the editor" +
           " so that it does not accept syntactically incorrect" +
-          " programs by eliminating the counter-examples."
+          " programs by eliminating the counter-examples.")
         val initGrammar = gentry.initGrammar
         if (!initGrammar.isDefined)
           throw new IllegalStateException("Initial grammar is not defined for problem: " + gentry.id)
-        (pack(stmt, ""), initGrammar)
+        (pack(intro, stmt), initGrammar)
     }
   }
 
