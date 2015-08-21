@@ -1,13 +1,3 @@
-### Setting up
-
-From the repository `CFG-Checking`, run the following commands to ensure that you have all the necessary files.
-
-    cp target/scala-2.11/cfgchecker_2.11-0.1.jar ../grammar-web/lib/
-    cp lib/antlr-4.5-complete.jar ../grammar-web/lib/
-    cp exercises-data/GrammarDatabase.xml ../grammar-web/public/resources/
-    cp exercises-data/*.gram ../grammar-web/public/resources/
-
-
 ### Running the web interface.
 
 Inside the folder `grammar-web`, run the following command:
@@ -32,10 +22,10 @@ This will ensure that sources are recompiled each time.
 ### Setting up SBT
 
 1. Open the folder grammar-web in two shells
-2. In the first one, type  
-   `sbt -jvm-debug 9999` and then ENTER. In the sbt console, type:  
+2. In the first one, type
+   `sbt -jvm-debug 9999` and then ENTER. In the sbt console, type:
    `~runServer`
-3. In the other one, type  
+3. In the other one, type
    `sbt ~fastOptCopy`
 
 2 compiles and runs the server continuously, 3 recompile scala to javascript each time you modify sources.
