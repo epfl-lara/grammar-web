@@ -90,8 +90,8 @@ object GrammarApp extends JSApp {
     def setErrorsCorrect(errors: ErrorMap, correct: CorrectMap) = _setErrorsCorrect((errors, correct))
     def render(word: List[String], nonterminals: Array[String], errors: ErrorMap, correct: CorrectMap) = {
       currentTable = CYKTable(word, nonterminals, storeContent, errors, correct, _setErrorsCorrect = _).build
+      $("#cykbox").empty()
       React.render(currentTable, $("#cykbox")(0).asInstanceOf[dom.Node])
-      
     }
   }
   
@@ -177,6 +177,21 @@ object GrammarApp extends JSApp {
 
   var grammarSave: GrammarSave = GrammarSave.None
 
+      
+  object Button {
+    def norm = $("#button-norm")
+    def hints = $("#button-hints")
+    def check = $("#button-check")
+    def ll1 = $("#button-ll1")
+    def solve = $("#button-solve")
+    def abort = $("#button-abort")
+    def help = $("#button-help")
+    def amb = $("#button-amb")
+    def save = $("#button-save")
+    def undo = $("#button-undo")
+    def redo = $("#button-redo")
+  }
+  
   def onDocumentReady(): Unit = {
     val editor = ace.edit("codebox")
     val aceRange = ace.require("ace/range").Range
@@ -246,7 +261,7 @@ object GrammarApp extends JSApp {
     var lastSavedChange = lastChange
 
     def updateSaveButton(): Unit = {
-      var e = $("#button-save")
+      var e = Button.save
       if (lastChange == lastSavedChange) {
         e.addClass("disabled")
       } else {
@@ -295,13 +310,13 @@ object GrammarApp extends JSApp {
     }
 
     /** Save menu button */
-    $("#button-save").click((event: JQueryEventObject) => {
+    Button.save.click((event: JQueryEventObject) => {
       recompile()
       event.preventDefault()
     })
 
     /** Undo menu button */
-    $("#button-undo").click(((self: Element, event: JQueryEventObject) => {
+    Button.undo.click(((self: Element, event: JQueryEventObject) => {
       if (!$(self).hasClass("disabled")) {
         doUndo()
       }
@@ -309,7 +324,7 @@ object GrammarApp extends JSApp {
     }): js.ThisFunction)
 
     /** Redo menu button */
-    $("#button-redo").click(((self: Element, event: JQueryEventObject) => {
+    Button.redo.click(((self: Element, event: JQueryEventObject) => {
       if (!$(self).hasClass("disabled")) {
         doRedo()
       }
@@ -364,8 +379,8 @@ object GrammarApp extends JSApp {
     }
 
     def updateUndoRedo() {
-      var ub = $("#button-undo")
-      var rb = $("#button-redo")
+      val ub = Button.undo
+      val rb = Button.redo
 
       if (backwardChanges.length > 0) {
         ub.removeClass("disabled")
@@ -428,13 +443,13 @@ object GrammarApp extends JSApp {
     }
 
     /* function enableConsoleButtons() {
-       $("#button-check").removeClass("disabled")
-       $("#button-hints").removeClass("disabled")
+       Button.check.removeClass("disabled")
+       Button.hints.removeClass("disabled")
      }
 
      function disableConsoleButtons() {
-       $("#button-check").addClass("disabled")
-       $("#button-hints").addClass("disabled")
+       Button.check.addClass("disabled")
+       Button.hints.addClass("disabled")
      }*/
 
     handlers(CONSOLE) = (data: HandlerDataArgument) => {
@@ -449,15 +464,16 @@ object GrammarApp extends JSApp {
       addFeedback(data.message, "Input Syntax", true)
     }
 
+
     //disable, enable even handler
     handlers(DISABLE_EVENTS) = (data: HandlerDataArgument) => {
       $.each(data, (fld: js.Any, value: js.Any) => {
         fld.asInstanceOf[String] match {
-          case "normalize" => $("#button-norm").addClass("disabled")
-          case "getHints" => $("#button-hints").addClass("disabled")
-          case "doCheck" => $("#button-check").addClass("disabled")
-          case "checkLL1" => $("#button-ll1").addClass("disabled")
-          case "checkAmbiguity" => $("#button-ll1").addClass("disabled")
+          case "normalize" => Button.norm.addClass("disabled")
+          case "getHints" => Button.hints.addClass("disabled")
+          case "doCheck" => Button.check.addClass("disabled")
+          case "checkLL1" => Button.ll1.addClass("disabled")
+          case "checkAmbiguity" => Button.amb.addClass("disabled")
           case _ => ().asInstanceOf[js.Any]
           //add more events here if necessary
         }
@@ -467,11 +483,11 @@ object GrammarApp extends JSApp {
     handlers(ENABLE_EVENTS) = (data: HandlerDataArgument) => {
       $.each(data, (fld: js.Any, value: js.Any) => {
         fld.asInstanceOf[String] match {
-          case "normalize" => $("#button-norm").removeClass("disabled")
-          case "getHints" => $("#button-hints").removeClass("disabled")
-          case "doCheck" => $("#button-check").removeClass("disabled")
-          case "checkLL1" => $("#button-ll1").removeClass("disabled")
-          case "checkAmbiguity" => $("#button-amb").removeClass("disabled")
+          case "normalize" => Button.norm.removeClass("disabled")
+          case "getHints" => Button.hints.removeClass("disabled")
+          case "doCheck" => Button.check.removeClass("disabled")
+          case "checkLL1" => Button.ll1.removeClass("disabled")
+          case "checkAmbiguity" => Button.amb.removeClass("disabled")
           case _ => ().asInstanceOf[js.Any]
           //add more events here if necessary
         }
@@ -759,6 +775,7 @@ object GrammarApp extends JSApp {
       import AdminMode._
       val referenceRef = "reference"
       val initialRef = "initial"
+      
       case class ExerciseDescriptionBackend($: BackendScope[HandlerDataArgument, GrammarSave]) {
         def setGrammarSaveMode(g: GrammarSave) = {
           js.timers.setTimeout(timeWindow + 500)(grammarSave = g)
@@ -851,7 +868,7 @@ object GrammarApp extends JSApp {
       $("#login-input").attr("type", "hidden")
       $("#admin-login").html("")
       //display new buttons here
-      $("#button-solve").html( """<i class="icon-thumbs-up"></i> <span>Solve</span>""")
+      Button.solve.html( """<i class="icon-thumbs-up"></i> <span>Solve</span>""")
 
       all_use_cases = data.all_usecases.get
       new_problem_id = data.new_problem_id
@@ -1025,7 +1042,7 @@ object GrammarApp extends JSApp {
       editor.gotoLine(0)
     }
 
-    val buttonNorm = $("#button-norm")
+    val buttonNorm = Button.norm
 
     val hoverIn = (event: JQueryEventObject) => {
       buttonNorm.attr("title", "Removes Epsilon, Unit productions and makes the start symbol appear only on the left side")
@@ -1036,7 +1053,7 @@ object GrammarApp extends JSApp {
 
     buttonNorm.hover(hoverIn, hoverOut)
 
-    $("#button-norm").click(((self: Element, event: JQueryEventObject) => {
+    Button.norm.click(((self: Element, event: JQueryEventObject) => {
       if (!$(self).hasClass("disabled")) {
         var currentCode = editor.getValue()
         //first save the state
@@ -1054,6 +1071,8 @@ object GrammarApp extends JSApp {
       val pid = getCurrentProblemId()
       ExerciseMode.current match {
         case GrammarMode =>
+          Button.ll1.removeClass("disabled")
+          Button.amb.removeClass("disabled")
           var currentCode = editor.getValue()
           //first save the state
           save(currentCode)
@@ -1070,10 +1089,13 @@ object GrammarApp extends JSApp {
             leonSocket.send(msg)
           }
         case CYKTableMode =>
+          Button.ll1.addClass("disabled")
+          Button.amb.addClass("disabled")
           val table: String = CYKTableMode.getContent()
           var msg = JSON.stringify(
             l(ACTION -> DO_CHECK, EXERCISE_ID -> exid, PROBLEM_ID -> pid, "code" -> table)
           )
+          
           leonSocket.send(msg)
       }
       
@@ -1095,21 +1117,21 @@ object GrammarApp extends JSApp {
       }
     }
 
-    $("#button-check").click(((self: Element, event: JQueryEventObject) => {
+    Button.check.click(((self: Element, event: JQueryEventObject) => {
       if (!$(self).hasClass("disabled")) {
         doCheck()
       }
       event.preventDefault()
     }): js.ThisFunction)
 
-    $("#button-hints").click(((self: Element, event: JQueryEventObject) => {
+    Button.hints.click(((self: Element, event: JQueryEventObject) => {
       if (!$(self).hasClass("disabled")) {
         requestHint()
       }
       event.preventDefault()
     }): js.ThisFunction)
 
-    $("#button-abort").click((event: JQueryEventObject) => {
+    Button.abort.click((event: JQueryEventObject) => {
       eventTitle = "Abort"
       var extype = getCurrentExerciseId()
       if (extype == "")
@@ -1130,12 +1152,12 @@ object GrammarApp extends JSApp {
       }
     }
 
-    $("#button-help").click((event: JQueryEventObject) => {
+    Button.help.click((event: JQueryEventObject) => {
       eventTitle = "help"
       doHelp()
     })
 
-    $("#button-ll1").click(((self: Element, event: JQueryEventObject) => {
+    Button.ll1.click(((self: Element, event: JQueryEventObject) => {
       eventTitle = "LL1 check"
       if (!$(self).hasClass("disabled")) {
         val currentCode = editor.getValue()
@@ -1149,7 +1171,7 @@ object GrammarApp extends JSApp {
       event.preventDefault()
     }): js.ThisFunction)
 
-    $("#button-amb").click(((self: Element, event: JQueryEventObject) => {
+    Button.amb.click(((self: Element, event: JQueryEventObject) => {
       eventTitle = "Ambiguity check"
       if (!$(self).hasClass("disabled")) {
         val currentCode = editor.getValue()
@@ -1163,7 +1185,7 @@ object GrammarApp extends JSApp {
       event.preventDefault()
     }): js.ThisFunction)
 
-    $("#button-solve").click(((self: Element, event: JQueryEventObject) => {
+    Button.solve.click(((self: Element, event: JQueryEventObject) => {
       eventTitle = "Solve event"
       if (!$(self).hasClass("disabled")) {
         //get "id" of the selected problem
