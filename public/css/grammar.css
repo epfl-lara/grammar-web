@@ -211,6 +211,7 @@ div#title div.toolbox a {
 }
 div#title div.toolbox a.disabled {
     color: #666;
+    cursor: default;
 }
 
 a#button-compilation {
