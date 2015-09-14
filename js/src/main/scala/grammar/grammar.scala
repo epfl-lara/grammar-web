@@ -178,9 +178,7 @@ object GrammarApp extends JSApp {
   var grammarSave: GrammarSave = GrammarSave.None
 
   def onDocumentReady(): Unit = {
-    println("Starting the script")
     val editor = ace.edit("codebox")
-    println("Continuing the script")
     val aceRange = ace.require("ace/range").Range
     ace.require("ace/token_tooltip")
     editor.setTheme("ace/theme/chrome")
