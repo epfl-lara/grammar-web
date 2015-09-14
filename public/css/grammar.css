@@ -56,10 +56,16 @@ div#title {
 
 .cyk-table {
   background: #164F00;
+  margin-left: 1em;
 }
 .cyk-table td {
   text-align: center;
   max-width: 5em;
+}
+.cyk-table tr:not(.cyk-header) td {
+  border-left: 1px solid #7FAC81;
+  border-right: 1px solid #7FAC81;
+  background: #678368;
 }
 .cyk-header {
   background: white;
