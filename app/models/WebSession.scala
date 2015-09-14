@@ -225,8 +225,12 @@ class WebSession(remoteIP: String) extends Actor {
               event(PROBLEMS, data)
               // enable or disable buttons
               exType.get match {
-                case ExerciseType.GrammarEx => enableEvents(List(GET_HINTS, NORMALIZE))
-                case _ => disableEvents(List(GET_HINTS, NORMALIZE))
+                case ExerciseType.GrammarEx => enableEvents(List(GET_HINTS, NORMALIZE, CHECK_AMBIGUITY, CHECK_LL1))
+                case ExerciseType.CYKEx => disableEvents(List(GET_HINTS, NORMALIZE, CHECK_AMBIGUITY, CHECK_LL1))
+                case ExerciseType.DerivationEx => disableEvents(List(GET_HINTS, NORMALIZE, CHECK_AMBIGUITY, CHECK_LL1))
+                case _ =>
+                  disableEvents(List(GET_HINTS, NORMALIZE))
+                  enableEvents(List(CHECK_AMBIGUITY, CHECK_LL1))
               }
             } else {
 
