@@ -469,11 +469,11 @@ object GrammarApp extends JSApp {
     handlers(DISABLE_EVENTS) = (data: HandlerDataArgument) => {
       $.each(data, (fld: js.Any, value: js.Any) => {
         fld.asInstanceOf[String] match {
-          case "normalize" => Button.norm.addClass("disabled")
-          case "getHints" => Button.hints.addClass("disabled")
-          case "doCheck" => Button.check.addClass("disabled")
-          case "checkLL1" => Button.ll1.addClass("disabled")
-          case "checkAmbiguity" => Button.amb.addClass("disabled")
+          case NORMALIZE => Button.norm.addClass("disabled")
+          case GET_HINTS => Button.hints.addClass("disabled")
+          case DO_CHECK => Button.check.addClass("disabled")
+          case CHECK_LL1 => Button.ll1.addClass("disabled")
+          case CHECK_AMBIGUITY => Button.amb.addClass("disabled")
           case _ => ().asInstanceOf[js.Any]
           //add more events here if necessary
         }
@@ -483,11 +483,11 @@ object GrammarApp extends JSApp {
     handlers(ENABLE_EVENTS) = (data: HandlerDataArgument) => {
       $.each(data, (fld: js.Any, value: js.Any) => {
         fld.asInstanceOf[String] match {
-          case "normalize" => Button.norm.removeClass("disabled")
-          case "getHints" => Button.hints.removeClass("disabled")
-          case "doCheck" => Button.check.removeClass("disabled")
-          case "checkLL1" => Button.ll1.removeClass("disabled")
-          case "checkAmbiguity" => Button.amb.removeClass("disabled")
+          case NORMALIZE => Button.norm.removeClass("disabled")
+          case GET_HINTS => Button.hints.removeClass("disabled")
+          case DO_CHECK => Button.check.removeClass("disabled")
+          case CHECK_LL1 => Button.ll1.removeClass("disabled")
+          case CHECK_AMBIGUITY => Button.amb.removeClass("disabled")
           case _ => ().asInstanceOf[js.Any]
           //add more events here if necessary
         }
@@ -1071,8 +1071,6 @@ object GrammarApp extends JSApp {
       val pid = getCurrentProblemId()
       ExerciseMode.current match {
         case GrammarMode =>
-          Button.ll1.removeClass("disabled")
-          Button.amb.removeClass("disabled")
           var currentCode = editor.getValue()
           //first save the state
           save(currentCode)
@@ -1089,8 +1087,6 @@ object GrammarApp extends JSApp {
             leonSocket.send(msg)
           }
         case CYKTableMode =>
-          Button.ll1.addClass("disabled")
-          Button.amb.addClass("disabled")
           val table: String = CYKTableMode.getContent()
           var msg = JSON.stringify(
             l(ACTION -> DO_CHECK, EXERCISE_ID -> exid, PROBLEM_ID -> pid, "code" -> table)
