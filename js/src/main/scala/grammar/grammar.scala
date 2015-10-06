@@ -52,8 +52,8 @@ object GrammarApp extends JSApp {
   val licenceAgreementTitle = "Consent for Data Collection"
   val licenceAccept = "I accept"
   val licenceDecline = "I decline"
-  val licenceAgreement = s"I hereby accept that my data are recorded for research purpose and for improving the system, " +
-    "provided that all data are anonymized.<br/> By Clicking on '$licenceAccept', I accept a cookie lasting for 1 week."
+  val licenceAgreement = s"I hereby accept that my data are recorded for research purpose and for improving the system, " + 
+    s"provided that all data are anonymized.<br/> By Clicking on '$licenceAccept', I accept a cookie lasting for 1 week."
   val LICENCE_COOKIE_DAYS_EXPIRE = 7
   val LICENCE_COOKIE = "LicenceCookie"
   val LICENCE_COOKIE_ACCEPTED = "LicenseAccepted"
@@ -801,14 +801,15 @@ object GrammarApp extends JSApp {
               adminmode.Button("reference", () => {
                 B.setGrammarSaveMode(GrammarSave.Reference)
                 grammarSave = GrammarSave.None
-                replaceGrammar(P.reference)}, selected = S == GrammarSave.Reference).buildWithRef(referenceRef),
+                replaceGrammar(P.reference)},
+                selected = S == GrammarSave.Reference).buildWithRef(referenceRef),
               adminmode.Button("initial", () => {
                 B.setGrammarSaveMode(GrammarSave.Initial)
                 val initGrammar = if(P.initial.isDefined) P.initial.get else ""
                 grammarSave = GrammarSave.None
                 replaceGrammar(initGrammar)
               }, selected = S == GrammarSave.Initial).buildWithRef(initialRef),
-              grammarSave != GrammarSave.None ?= adminmode.Button("exit grammar editing mode", () => {
+              S != GrammarSave.None ?= adminmode.Button("exit editing mode", () => {
                 addFeedback("Exiting grammar save mode")
                 B.setGrammarSaveMode(GrammarSave.None)}).build,
               <.br()

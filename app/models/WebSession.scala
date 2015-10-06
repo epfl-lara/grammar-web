@@ -253,7 +253,7 @@ class WebSession(remoteIP: String) extends Actor {
                     (if (adminMode) Map(
                       ALL_USE_CASES -> toJson(getAllUseCases),
                       SAVE.usecases -> toJson(gentry.usecases.mkString("\n")),
-                      SAVE.reference -> toJson(gentry.refGrammar.toString),
+                      SAVE.reference -> toJson(gentry.reference.toString),
                       SAVE.title -> toJson(gentry.name),
                       SAVE.description -> toJson(gentry.desc)) ++
                       (gentry.initGrammar match {
