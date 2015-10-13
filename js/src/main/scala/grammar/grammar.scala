@@ -292,6 +292,11 @@ object GrammarApp extends JSApp {
           storeCurrent(oldCode)
         }
       }
+      grammarSave match {
+        case GrammarSave.Initial =>   saveGrammarProperty(SAVE.initial)(currentCode)
+        case GrammarSave.Reference => saveGrammarProperty(SAVE.reference)(currentCode)
+        case GrammarSave.None =>
+      }
       oldCode = currentCode
       lastSavedChange = lastChange
       updateSaveButton()
@@ -361,12 +366,6 @@ object GrammarApp extends JSApp {
     }
 
     def storeCurrent(code: String) {
-      grammarSave match {
-        case GrammarSave.Initial =>   saveGrammarProperty(SAVE.initial)(code)
-        case GrammarSave.Reference => saveGrammarProperty(SAVE.reference)(code)
-        case GrammarSave.None =>
-      }
-
       forwardChanges = js.Array()
       if (backwardChanges.length >= 1) {
         if (code != backwardChanges(backwardChanges.length - 1)) {

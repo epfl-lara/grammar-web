@@ -316,10 +316,13 @@ class WebSession(remoteIP: String) extends Actor {
                     case None =>
                       clientLog("The grammar cannot parse. " + error); g
                     case Some(reference) =>
-                      if (newReference != reference) {
-                        updatedFields += ("Reference grammar for " + g.name + " saved")
+                      if (reference.toString != g.reference.toString) {
+                        updatedFields += ("Reference grammar for " + g.name + " saved:" + reference.toString)
                         g.copy(reference = reference).setToExportReference()
-                      } else g
+                      } else  {
+                        clientLog("Old reference:" + g.reference.toString + "<br>New one: " + reference.toString + "<br>Was not saved because identical to reference ")
+                        g
+                      }
                   }
                 case (g, SAVE.word) =>
                   val parseWord = (msg \ SAVE.word).as[String]
