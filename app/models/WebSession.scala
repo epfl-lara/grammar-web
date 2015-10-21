@@ -638,7 +638,9 @@ class WebSession(remoteIP: String) extends Actor {
         val wopt = gentry.word match {
           case None =>
             generateRandomWord(gentry.refGrammar.fromCNF)
-          case s => s
+          case s =>
+            wordForDerivation = s
+            s
         }
         val otherfields = Map(CYK_EXERCISES.nonterminals -> toJson(cnfRef.nonTerminals.mkString(",")),
           CYK_EXERCISES.word -> toJson(wopt.map(wordToString).getOrElse("")))
